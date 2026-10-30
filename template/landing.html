@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{GUILD}} · Raid Reviews</title>
+<style>
+:root { --bg: #f7f6f2; --panel: #ffffff; --fg: #1f1e1b; --muted: #6b6860; --line: #e3e0d8; --accent: #2f6fdb; --accent2: #2a9d8f; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #171614; --panel: #201f1c; --fg: #f1efe9; --muted: #a39f95; --line: #34322d; --accent: #6ea2ff; --accent2: #4fc3b4; } }
+:root[data-theme="dark"] { --bg: #171614; --panel: #201f1c; --fg: #f1efe9; --muted: #a39f95; --line: #34322d; --accent: #6ea2ff; --accent2: #4fc3b4; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 48px 16px 64px; }
+h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; font-size: 34px; margin: 0 0 6px; }
+h2 { font-size: 15px; font-weight: 600; color: var(--muted); margin: 28px 0 10px; text-transform: none; }
+.sub { color: var(--muted); font-size: 14px; margin-bottom: 8px; line-height: 1.5; }
+.cards { display: grid; gap: 14px; }
+a.card { display: block; text-decoration: none; color: inherit; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 12px; padding: 18px 20px; transition: transform .15s, box-shadow .15s; }
+a.card.all { border-left-color: var(--accent2); }
+a.card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.08); }
+a.card h3 { margin: 0 0 6px; font-size: 19px; }
+a.card p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.go { display: inline-block; margin-top: 10px; font-size: 14px; font-weight: 600; color: var(--accent); }
+a.card.all .go { color: var(--accent2); }
+footer { margin-top: 28px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<main>
+  <h1>{{GUILD}} · Raid reviews</h1>
+  <div class="sub">Built from Warcraft Logs (including its replay) and Wipefest. Newest night first.</div>
+{{BLOCKS}}
+  <footer>Tip: open "Your report" and pick your name. Built with raid-review-kit.</footer>
+</main>
+</body>
+</html>

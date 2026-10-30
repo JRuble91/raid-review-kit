@@ -1,0 +1,190 @@
+<div class="rr">
+  <header id="top">
+    <h1 id="h1">Raid review</h1>
+    <div class="sub" id="sub">—</div>
+    <p class="lead" id="lead"><span class="dash-skeleton">—</span></p>
+  </header>
+
+  <div class="bar">
+    <div class="tabs" role="tablist" aria-label="Sections">
+      <button role="tab" id="tab-issues" data-tab="issues" aria-selected="true">Biggest problems</button>
+      <button role="tab" id="tab-overview" data-tab="overview" aria-selected="false">Overview</button>
+      <button role="tab" id="tab-fight" data-tab="fight" aria-selected="false">The fight</button>
+      <button role="tab" id="tab-report" data-tab="report" aria-selected="false">Your report</button>
+      <button role="tab" id="tab-replay" data-tab="replay" aria-selected="false">Replay &amp; pulls</button>
+    </div>
+    <div class="cut"><span>Count the first</span>
+      <div class="seg" id="cut-seg" role="group" aria-label="Deaths counted per pull">
+        <button data-cut="3">3</button><button data-cut="4">4</button><button data-cut="5">5</button><button data-cut="99">All</button>
+      </div><span>deaths of each pull</span></div>
+  </div>
+
+  <!-- ============ BIGGEST PROBLEMS ============ -->
+  <section id="issues" data-page="issues" class="rr">
+    <div id="issues-body" class="rr"></div>
+  </section>
+
+  <!-- ============ OVERVIEW ============ -->
+  <section id="overview" data-page="overview" class="rr" hidden>
+    <div class="tiles">
+      <div class="tile"><div class="lbl" id="t1-lbl">Best pull</div><div class="big dash-skeleton" id="t1-big">—</div><div class="ctx" id="t1-ctx">—</div></div>
+      <div class="tile"><div class="lbl" id="t2-lbl">Alive at the checkpoint</div><div class="big dash-skeleton" id="t2-big">—</div><div class="ctx" id="t2-ctx">—</div></div>
+      <div class="tile"><div class="lbl" id="t3-lbl">—</div><div class="big dash-skeleton" id="t3-big">—</div><div class="ctx" id="t3-ctx">—</div></div>
+      <div class="tile"><div class="lbl">Biggest killer</div><div class="big dash-skeleton" id="tile-share" data-source="cutoff_causes" data-field="share_txt">—</div><div class="ctx"><span id="tile-cause" data-source="cutoff_causes" data-field="cause">—</span>: <span id="tile-share-n" data-source="cutoff_causes" data-field="deaths">—</span> of the <span id="tile-total" data-source="cutoff_causes" data-field="total">—</span> deaths that counted</div></div>
+    </div>
+
+    <div id="walls-wrap">
+      <h2>What ended our pulls</h2>
+      <p class="note">The moments that took out most of our pulls. Click a pull to watch that moment in the replay.</p>
+      <div class="walls dash-skeleton" id="walls" data-source="walls wall_pulls" style="min-height:260px"></div>
+    </div>
+
+    <div class="card" id="boss-card">
+      <h2>Boss health at every pull</h2>
+      <p class="note">Lower is better. The dashed line is our best so far. Dot color shows how far the pull got. Click any pull to watch it.</p>
+      <div class="legend" id="boss-legend"></div>
+      <div class="chart dash-skeleton" id="boss-chart" data-source="pull_view" style="min-height:300px"></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card" id="killers-card">
+        <h2>What kills us</h2>
+        <p class="note">Deaths that counted, by ability. The darker part is how often it was the <b>first</b> death of the pull. Click one to see it on the fight map.</p>
+        <div id="killers" class="dash-skeleton" data-source="cutoff_causes" style="min-height:240px"></div>
+      </div>
+      <div class="card" id="fourth-card">
+        <h2>The 4th death decides the pull</h2>
+        <p class="note" id="fourth-note">—</p>
+        <div class="chart dash-skeleton" id="fourth-chart" data-source="pull_view"></div>
+      </div>
+    </div>
+
+    <div class="card" id="habits-card">
+      <h2>Raid habits on Wipefest</h2>
+      <p class="note">Raid totals with Wipefest's 4-death cutoff, and how we rank against other raids on the same boss (100 is the best raid, 0 the worst), averaged over the pulls.</p>
+      <div class="tablebox">
+        <table id="habits-table">
+          <thead><tr><th>Mechanic</th><th class="r">Raid total</th><th class="r">Rank vs other raids</th><th class="r" id="habits-night-th">By night</th></tr></thead>
+          <tbody id="habits-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ THE FIGHT ============ -->
+  <section id="fight" data-page="fight" class="rr" hidden>
+    <div class="card" id="map-card">
+      <h2>The wipe map</h2>
+      <p class="note">Every pull is a row, every dot is a death. The shaded bands are when the boss's main abilities and phases land (median timings across these pulls). Faded dots came after the pull was already lost. Click a mechanic to isolate it, or a row to watch that pull.</p>
+      <div class="legend" id="map-legend"></div>
+      <div class="prow" style="margin-bottom:var(--cds-gap-sm)"><label class="sub" for="map-player">Highlight a player</label>
+        <select id="map-player" class="chip-btn" aria-label="Highlight a player"></select></div>
+      <div class="chart dash-skeleton" id="map-chart" data-source="ranked fight_timeline pull_view" style="min-height:400px"></div>
+    </div>
+
+    <div id="guide-wrap">
+      <h2 style="margin-bottom:var(--cds-gap-xs)">What kills us, ability by ability</h2>
+      <p class="note">Each ability that killed people, how to play it, and how many of our counted deaths it caused.</p>
+      <div class="guide dash-skeleton" id="guide" data-source="mechanic_guide cutoff_causes" style="min-height:200px"></div>
+    </div>
+  </section>
+
+  <!-- ============ YOUR REPORT ============ -->
+  <section id="report" data-page="report" class="rr" hidden>
+    <div class="card" id="pick-card">
+      <h2>Pick your character</h2>
+      <p class="note">Your deaths, what got you, how you did on each mechanic compared with the raid, and the things to work on first. Click any of your deaths to watch it in the replay.</p>
+      <div class="pickers dash-skeleton" id="pickers" data-source="players4"></div>
+    </div>
+    <div id="report-empty" class="card empty">Pick your name above to see your report.</div>
+    <div id="report-body" hidden class="rr">
+      <div class="card" id="rp-card">
+        <div><h2 id="rp-name">—</h2><div class="sub" id="rp-role">—</div></div>
+        <div class="stat-row" style="margin-top:var(--cds-gap-md)">
+          <div class="stat"><div class="v" id="rp-deaths">—</div><div class="l">deaths that counted (<span id="rp-rank">—</span> most in the raid)</div></div>
+          <div class="stat"><div class="v" id="rp-opened">—</div><div class="l">times first to die</div></div>
+          <div class="stat"><div class="v" id="rp-avg">—</div><div class="l">average time of those deaths</div></div>
+          <div class="stat" id="rp-score-stat"><div class="v" id="rp-score">—</div><div class="l">Wipefest score (raid best <span id="rp-best">—</span>)</div></div>
+        </div>
+      </div>
+      <div id="rp-fixes-wrap">
+        <h2 style="margin-bottom:var(--cds-gap-sm)">Your top things to work on</h2>
+        <div class="fixes" id="rp-fixes"></div>
+      </div>
+      <div class="grid2">
+        <div class="card" id="rp-causes-card"><h2>What got you</h2><p class="note">Your counted deaths by ability.</p><div id="rp-causes" style="min-height:120px"></div></div>
+        <div class="card" id="rp-strip-card"><h2>When you died</h2><p class="note">Each dot is one of your counted deaths on the fight timeline. Click one to watch it.</p><div class="chart" id="rp-strip" style="min-height:150px"></div></div>
+      </div>
+      <div class="card" id="rp-table-card">
+        <h2>You vs the raid</h2>
+        <p class="note">Wipefest numbers with the 4-death cutoff, per 10 pulls you were in. Red is worse than the raid's middle player, green is better.</p>
+        <table id="rp-table">
+          <thead><tr><th>Mechanic</th><th class="r">You</th><th class="r">Raid median</th><th class="r">Raid worst</th></tr></thead>
+          <tbody id="rp-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ REPLAY & PULLS ============ -->
+  <section id="replay" data-page="replay" class="rr" hidden>
+    <div class="card" id="pull-card">
+      <div class="step">
+        <button id="pull-prev" aria-label="Previous pull">◀</button>
+        <h2 style="min-width:6.5rem" id="pv-label">—</h2>
+        <button id="pull-next" aria-label="Next pull">▶</button>
+        <input type="range" id="pull-range" min="1" step="1" aria-label="Pull number">
+        <button id="pull-best">Best pull</button>
+      </div>
+      <div class="pills" style="margin-top:var(--cds-gap-md)">
+        <span class="pill">Boss <b id="pv-boss">—</b></span>
+        <span class="pill">Length <b id="pv-len">—</b></span>
+        <span class="pill">Reached <b id="pv-phase">—</b></span>
+        <span class="pill"><span id="pv-alive-lbl">Alive at the checkpoint</span> <b id="pv-alive">—</b></span>
+        <span class="pill">4th death <b id="pv-fourth">—</b></span>
+        <span class="pill">Started <b id="pv-start">—</b></span>
+      </div>
+      <p class="sub" style="margin:var(--cds-gap-sm) 0 0"><a id="wcl-link" class="clip" target="_blank" rel="noopener" href="https://www.warcraftlogs.com/">Watch this pull on Warcraft Logs ↗</a></p>
+    </div>
+
+    <div class="card rp-wrap" id="replay-card">
+      <div>
+        <h2>Replay</h2>
+        <p class="note" style="margin-bottom:0">Top-down view from the Warcraft Logs replay, one position per player per second. Click a line in the feed to jump to it.</p>
+      </div>
+      <div class="rp-controls">
+        <button id="rp-play" class="chip-btn" aria-label="Play">▶ Play</button>
+        <div class="seg" id="rp-speed" role="group" aria-label="Playback speed"><button data-speed="1">1×</button><button data-speed="2">2×</button><button data-speed="4">4×</button></div>
+        <span class="clock" id="rp-clock">—</span>
+        <label class="sub" for="rp-follow">Follow</label>
+        <select id="rp-follow" class="chip-btn"></select>
+        <button id="rp-names" class="chip-btn" aria-pressed="false">Show names</button>
+      </div>
+      <div class="jumps" id="rp-jumps"></div>
+      <div class="rp-grid">
+        <div class="rp-map dash-skeleton" id="replay-map"></div>
+        <div class="feed" id="rp-feed" aria-live="off"></div>
+      </div>
+      <div class="chart" id="replay-strip" role="slider" tabindex="0" aria-label="Replay time"></div>
+      <div class="rp-key" id="rp-key"></div>
+    </div>
+
+    <div class="card" id="alive-card">
+      <h2>Raiders alive</h2>
+      <p class="note">This pull in color, our best pull in grey. Mechanic bands as on the wipe map. The vertical line follows the replay; click the chart to jump.</p>
+      <div class="chart dash-skeleton" id="alive-chart" style="min-height:220px"></div>
+    </div>
+    <div class="card" id="deaths-card">
+      <h2>Who died, when, to what</h2>
+      <p class="note">Faded rows came after the counted deaths, when the pull was already going down. Click a row to watch it.</p>
+      <div class="tablebox">
+        <table id="pv-table">
+          <thead><tr><th>#</th><th>Time</th><th>Player</th><th>Killed by</th><th>Note</th></tr></thead>
+          <tbody id="pv-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <p class="sub" id="sources">—</p>
+</div>
