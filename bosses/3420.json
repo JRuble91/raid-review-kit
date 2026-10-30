@@ -1,0 +1,142 @@
+{
+  "boss": "Sszorak",
+  "zone": "The Venomous Abyss",
+  "notes": "Example profile. Every field is optional; anything left out is worked out from the logs.",
+  "stages": [
+    "Wiped in Stage 1",
+    "Reached the winds",
+    "Made it through the winds"
+  ],
+  "stage_tile": "Reached the winds",
+  "arena": {
+    "shape": "octagon",
+    "r": 50,
+    "view": 60,
+    "rotate_to": "Serpent's Fury"
+  },
+  "rings": [
+    {
+      "ability": "Virulence",
+      "style": "ring"
+    },
+    {
+      "ability": "Serpent's Fury",
+      "style": "dash"
+    }
+  ],
+  "enrage": [
+    "Unbound Ferocity"
+  ],
+  "enrage_title": "Fury not soaked, boss enraged",
+  "guide": {
+    "Tempest": {
+      "name": "Tempest",
+      "group": "Apex Predator (tank combo)",
+      "who": "Everyone",
+      "what": "Tornadoes fire out from the boss. Getting hit does big damage and stacks a DoT on you.",
+      "todo": "Watch the boss when the combo starts and step out of the tornado lines. Don't sidestep into someone else's lane.",
+      "fixes": [
+        "Watch the boss when each tank combo starts and step out of the tornado lines. Don't sidestep into someone else's lane.",
+        "If a tornado clips you, press a healthstone or personal right away. The DoT is what kills you 10 seconds later, in the Fury stack.",
+        "Healers: top up Tempest-DoT targets before the Fury pop, not after."
+      ],
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/sszorak/tempest.mp4"
+    },
+    "Virulence": {
+      "name": "Serpent's Fury → Virulence",
+      "group": "Mythic only",
+      "who": "Everyone",
+      "what": "A big circle lands on one player and 14 people must stand in it, or the boss builds rage toward an enrage. Everyone who soaked gets Virulence: when it expires it bursts in lines that spread it to anyone they hit.",
+      "todo": "Soak the circle, then go straight to the edge and spread out. Come into every stack healthy: if someone carrying Virulence dies in the stack, it bursts onto everyone around them.",
+      "fixes": [
+        "Come into every Fury stack healthy. If you have a Tempest DoT or Surge on you, use a personal or healthstone before the pop.",
+        "Healers: the 5 seconds after the pop are for the Virulence carriers. Top them first.",
+        "Spread to your spot at the edge straight away so the lines don't clip anyone."
+      ],
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/sszorak/virulence.mp4",
+      "clip2": "https://assets2.mythictrap.com/videos/venomous-abyss/sszorak/serpentsFury.mp4"
+    },
+    "Venomous Surge": {
+      "name": "Venomous Surge",
+      "group": "Raid damage + Cyst drops",
+      "who": "Everyone",
+      "what": "Several players get marked. When the debuff ends they leave a Viscous Cyst at their feet. The damage is lower the farther apart people are.",
+      "todo": "Spread before it lands and use a personal if you're low. If you're marked, drop your Cyst opposite the marked wind tunnels so it's ready for the winds.",
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/sszorak/venomousSurge.mp4"
+    },
+    "Viscous Cyst": {
+      "name": "Viscous Cyst",
+      "group": "Tool for the winds",
+      "who": "Everyone",
+      "what": "Touching a Cyst pops it, knocking everyone back and slowing them. You need them to stay on the platform during the winds. They pop by themselves after 2 minutes.",
+      "todo": "Walk around Cysts, never through them, from Surge until the winds. Only pop one on purpose during a wind push.",
+      "fixes": [
+        "Pre-assign Crosswinds partners every set. Paladins, Priests and Shamans have no reliable cancel, so pair them with someone who can collide with them, and have them call it.",
+        "Drop Surge Cysts on their markers, opposite the marked tunnels, and never in the lanes people fly down when Crosswinds goes off.",
+        "From the moment Surge lands until the winds, nobody walks over the Cyst spots. Path around them when you move for the next combo or stack.",
+        "In the winds, one called player pops each Cyst for its push. Nobody else touches one."
+      ],
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/sszorak/venomousSurge.mp4"
+    },
+    "Raging Crosswinds": {
+      "name": "Raging Crosswinds",
+      "group": "Knockback",
+      "who": "Everyone",
+      "what": "You get a circle with an arrow. A moment later you're knocked hard in the direction of the arrow.",
+      "todo": "Find someone whose arrow points the opposite way and line up with them so the knocks cancel out. Stay away from people who aren't your partner.",
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/sszorak/ragingCrosswinds.mp4"
+    },
+    "Mutilate": {
+      "name": "Mutilate",
+      "group": "Apex Predator (tank combo)",
+      "who": "Tanks + soak groups",
+      "what": "A frontal cone the tank aims at the raid. It's a group soak: the damage is shared by everyone standing in it.",
+      "todo": "Tanks aim it at the soak group. Soakers: be in your half and stacked before the second combo starts. It one-shots when too few people are in it.",
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/sszorak/mutilate.mp4"
+    },
+    "Mutilated Gash": {
+      "name": "Mutilated Gash",
+      "group": "Read from the logs",
+      "who": "Soak groups",
+      "what": "Not covered in the guides. Most of these deaths come 10 to 30 seconds after a Mutilate soak, so it looks like damage left over from soaking.",
+      "todo": "Treat it as a soak problem: alternate soak groups, and heal up or use a personal after you soak while low.",
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/sszorak/apexPredator.mp4"
+    },
+    "Ravage": {
+      "name": "Ravage",
+      "group": "Apex Predator (tank combo)",
+      "who": "Tanks",
+      "what": "A frontal cone on the tank that does massive damage and leaves a huge damage-taken debuff. It does not split.",
+      "todo": "Tanks aim it away from the raid and taunt when needed. Nobody else stands in front of the boss.",
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/sszorak/ravage.mp4"
+    },
+    "Caustic Claws": {
+      "name": "Caustic Claws",
+      "group": "Puddles",
+      "who": "Everyone",
+      "what": "Circles show where venom will land. Getting hit hurts a lot, and it leaves a puddle behind.",
+      "todo": "Step out of the circles and don't stand in the puddles.",
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/sszorak/causticClaws.mp4"
+    },
+    "Ula'tek's Presence": {
+      "name": "Ula'tek's Presence",
+      "group": "Constant raid damage",
+      "who": "Everyone",
+      "what": "Passive rot damage on the whole raid for the entire fight. It finishes off anyone left low by something else.",
+      "todo": "If you're low, don't wait for a heal: healthstone, potion or personal."
+    },
+    "Enrage": {
+      "fixes": [
+        "After the third wind push, the bait and the soak group go straight to the stack. The first Fury after the winds has the least time to spare.",
+        "For the second Fury, stack on the timer, not when combo 2 ends. Late gives you this enrage, and early makes the post-winds Fury harder.",
+        "If the bait dies, Fury jumps to someone new. Call the new name and move to that circle immediately."
+      ],
+      "todo": "Get 14 into every circle. If the bait dies, Fury jumps to someone new: find the new circle fast."
+    }
+  },
+  "sources": [
+    "https://www.mythictrap.com/en/venomous-abyss/sszorak/mythic",
+    "https://www.method.gg/guides/the-venomous-abyss/sszorak"
+  ],
+  "enrage_enough_alive": 14
+}
