@@ -19,6 +19,7 @@ A profile makes the pages read better for one boss. Without one, everything is w
 | `enrage` | Ability names (boss casts or buffs) that mean the boss enraged. Default: anything named "enrage" or "berserk". |
 | `enrage_enough_alive` | How many alive is enough to have done the mechanic that prevents the enrage. On Sszorak it's 14, for the Fury soak. |
 | `enrage_title` | Title of the enrage wall. |
+| `enrage_soakers` | Who can do the mechanic that prevents the enrage, for the "enough alive" count: `{"roles": ["Melee", "Ranged", "Healer"], "max": {"Healer": 2}, "before": 8, "label": "soakers (DPS plus up to 2 healers)", "short": "soakers alive", "noun": "soakers"}`. `before` = seconds before the enrage to count at. Default: everyone alive at the enrage. |
 | `rings` | Debuffs to draw on the replay: `[{"ability": "Virulence", "style": "ring"}, {"ability": "Serpent's Fury", "style": "dash"}]`. Use `ring` for debuffs many people carry, `dash` for a single marked player. Default: picked from the logs. |
 | `arena` | `shape` (`circle`, `octagon` or `none`), `r` (edge radius in yards), `view` (half-width shown, in yards), `rotate` (degrees) or `rotate_to` (a debuff name: the replay is turned so where its first holder stood points up). |
 | `checkpoint` | `{"t": 75, "alive": 17}`: the "N alive at time T" split used across the page. Default: T from the median 4th death, N = raid size − 3. |

@@ -138,5 +138,19 @@
     "https://www.mythictrap.com/en/venomous-abyss/sszorak/mythic",
     "https://www.method.gg/guides/the-venomous-abyss/sszorak"
   ],
-  "enrage_enough_alive": 14
+  "enrage_enough_alive": 14,
+  "enrage_soakers": {
+    "roles": [
+      "Melee",
+      "Ranged",
+      "Healer"
+    ],
+    "max": {
+      "Healer": 2
+    },
+    "before": 8,
+    "label": "soakers (DPS plus up to 2 healers)",
+    "short": "soakers alive",
+    "noun": "soakers"
+  }
 }
