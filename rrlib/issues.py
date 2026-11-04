@@ -137,12 +137,23 @@ def build(ctx):
                           status=status(tr), impact=len(bs)))
 
     # ---------------- B. enrage
+    # profile `enrage_soakers` = who can do the mechanic: {"roles": [...], "max": {"Healer": 2}, "before": 8, "label": "..."}
+    soak = ctx['profile'].get('enrage_soakers') or {}
+    role_of = {r['player']: r['role'] for r in ctx['players4']}
+    soakers = soak.get('label', 'people')
+
+    def able(p, t):
+        dead = {d['player'] for d in D_by[p['pull']] if d['t'] < t - soak.get('before', 0.5)}
+        up = [nm for nm in p['roster'] if nm not in dead]
+        if not soak.get('roles'): return len(up)
+        c = collections.Counter(role_of.get(nm, '?') for nm in up)
+        return sum(min(c[r], soak.get('max', {}).get(r, 99)) for r in soak['roles'])
+
     enr = []
     for p in pulls:
         t = next((e['t'] for e in E_by[p['pull']] if e['enrage']), None)
         if t is None: continue
-        alive = len(p['roster']) - sum(1 for d in D_by[p['pull']] if d['t'] < t - 0.5)
-        enr.append(dict(pull=p['pull'], t=t, alive=alive))
+        enr.append(dict(pull=p['pull'], t=t, alive=able(p, t)))
     if len(enr) >= 2:
         enough = ctx['profile'].get('enrage_enough_alive') or meta['checkpoint']['alive']
         hi_alive = [e for e in enr if e['alive'] >= enough]
@@ -157,16 +168,17 @@ def build(ctx):
             inw = [e for e in enr if c[0] - 0.1 <= e['t'] <= c[-1] + 0.1]
             big = max(inw, key=lambda e: e['alive'])
             rows.append(dict(label=f'{f2(c[0])} to {f2(c[-1])}' if c[0] != c[-1] else f2(c[0]), value=len(inw), dark=sum(1 for e in inw if e in hi_alive), max=len(enr),
-                             num=f"{len(inw)} · {sum(1 for e in inw if e in hi_alive)} with {enough}+ alive", go=dict(pull=big['pull'], t=max(0, big['t'] - 4))))
+                             num=f"{len(inw)} · {sum(1 for e in inw if e in hi_alive)} with {enough}+ {soak.get('short', 'alive')}", go=dict(pull=big['pull'], t=max(0, big['t'] - 4))))
         tr = trend(ctx, lambda p: any(e['pull'] == p['pull'] for e in enr), 'Pulls that hit the enrage')
         cards.append(dict(key='enrage', cause='', color='bad', title='The boss enrages', big=f'{len(enr)} of {N}', big_lbl='pulls hit the enrage',
                           summary=(f"{len(enr)} pulls hit the enrage. " + (
-                              f"{len(hi_alive)} of them still had {enough} or more people alive, enough to have done the mechanic, so it was missed rather than the raid already being dead."
-                              if hi_alive else f"In every one fewer than {enough} people were alive, so the pull was already going down when it happened.")),
-                          main=[dict(type='rows', title=f"When (darker: {enough}+ alive)", rows=rows)],
+                              f"{len(hi_alive)} of them still had {enough} or more {soakers} alive, enough to have done the mechanic, so it was missed rather than the raid already being dead."
+                              + (f" In the other {len(enr) - len(hi_alive)}, too many {soak.get('noun', soakers)} had already died." if len(enr) > len(hi_alive) else '')
+                              if hi_alive else f"In every one fewer than {enough} {soakers} were alive, so the pull was already going down when it happened.")),
+                          main=[dict(type='rows', title=f"When (darker: {enough}+ {soak.get('short', 'alive')})", rows=rows)],
                           side=[tr], fixes=guide_fixes(ctx, 'Enrage', ['Find what triggers the enrage on this boss and assign someone to call it.',
                                                                        'Watch the pulls below: the enrage came with most of the raid alive.']),
-                          examples=ex(ctx, sorted(enr, key=lambda e: -e['alive'])[:4], lambda r: f"{r['alive']} alive"), status=status(tr), impact=len(enr)))
+                          examples=ex(ctx, sorted(enr, key=lambda e: -e['alive'])[:4], lambda r: f"{r['alive']} {soak.get('short', 'alive')}"), status=status(tr), impact=len(enr)))
 
     # ---------------- C. the first deaths decide the pull
     cp = meta['checkpoint']
