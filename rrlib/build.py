@@ -273,6 +273,7 @@ def page_data(nights, profile, guild='', kit_dir='.'):
     # ---- wipe bursts and walls
     bursts = {}
     for p in pulls:
+        if p.get('kill'): continue
         ds = D_by[p['pull']]; best = None
         for x in ds:
             w = [y for y in ds if x['t'] <= y['t'] < x['t'] + 6]

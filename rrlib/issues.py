@@ -151,6 +151,7 @@ def build(ctx):
 
     enr = []
     for p in pulls:
+        if p.get('kill'): continue  # a kill that ends in the enrage isn't a missed mechanic
         t = next((e['t'] for e in E_by[p['pull']] if e['enrage']), None)
         if t is None: continue
         enr.append(dict(pull=p['pull'], t=t, alive=able(p, t)))
