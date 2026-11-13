@@ -157,23 +157,26 @@ def set_report(f, AB, P, m, raid_up=RAID_UP):
 
 
 def replay_extras(nights, gmap, profile):
-    """Globules on the replay, a flash on whoever takes one, and a red ring on everyone who sat out a set where one blew up."""
+    """Globules on the floor (with a 10 s fuse), who grabbed each one, and a red ring on everyone who hadn't grabbed one when one blew up."""
     debuffs, objects, notes = collections.defaultdict(list), collections.defaultdict(list), collections.defaultdict(list)
     for code, np_, pull, f, AB, P, m in globule_pulls(nights, gmap):
         key = (code, np_)
         for gl in m['glob']:
-            s0 = gl['spawn']
-            end = gl['soaked']['t'] if gl['soaked'] else gl['blast'] if gl['blast'] is not None else min(m['dur'], s0 + FUSE)
+            s0 = gl['spawn']; fuse = s0 + FUSE
+            end = gl['soaked']['t'] if gl['soaked'] else gl['blast'] if gl['blast'] is not None else min(m['dur'], fuse)
             x, y = gl['x'], gl['y']
             if x is None and gl['soaked'] and gl['soaked']['x'] is not None: x, y = gl['soaked']['x'], gl['soaked']['y']
-            if x is None: continue
+            if x is None: continue          # unshielded and nobody grabbed it: the log has no spot for it
             se = gl['shield_end']
+            who = gl['soaked']['who'] if gl['soaked'] else None
             if se is not None and se > s0:
-                objects[key].append([0, x, y, s0, min(se, end), 'Globule, Barbed Bulwark still up'])
+                objects[key].append([0, x, y, s0, min(se, end), 'Globule with a shield: break it with a stun or fear first', fuse, s0])
             objects[key].append([1, x, y, min(se, end) if se is not None and se > s0 else s0, end,
-                                 f"Globule, taken by {gl['soaked']['who']} at {int(gl['soaked']['t'] // 60)}:{int(gl['soaked']['t'] % 60):02d}" if gl['soaked'] else 'Globule, nobody took it'])
+                                 f"Globule: {who} grabbed it at {int(end // 60)}:{int(end % 60):02d}" if who else 'Globule: nobody grabbed it', fuse, s0])
+            if who:
+                objects[key].append([3, x, y, end, end + 1.8, f"{who} grabbed it"])
             if gl['blast'] is not None:
-                objects[key].append([2, x, y, gl['blast'], gl['blast'] + 2.5, 'Globule exploded: nobody took it'])
+                objects[key].append([2, x, y, gl['blast'], gl['blast'] + 2.5, 'Blew up!'])
         for s in m['soaks']:
             debuffs[code].append(dict(np=np_, player=s['who'], ability='Took a Globule', s=s['t'], e=s['t'] + 1.5, stacks=1))
         for S in set_report(f, AB, P, m, raid_up=1):
@@ -186,9 +189,76 @@ def replay_extras(nights, gmap, profile):
             j = i
             while j + 1 < len(bl) and bl[j + 1]['t'] - bl[i]['t'] < 1.5: j += 1
             n_ = j - i + 1
-            notes[key].append([bl[i]['t'], f"{n_} Globule{'s' if n_ > 1 else ''} exploded, nobody took {'them' if n_ > 1 else 'it'}", 2])
+            notes[key].append([bl[i]['t'], f"{'A Globule' if n_ == 1 else str(n_) + ' Globules'} blew up: nobody grabbed {'it' if n_ == 1 else 'them'}", 2])
             i = j + 1
     return dict(debuffs=debuffs, objects=objects, notes=notes)
+
+
+def globule_stats(ctx, GP):
+    """Per player, over rounds (Deluges) with the raid up: rounds alive, Globules grabbed, rounds where one blew up and they hadn't grabbed one."""
+    per = collections.defaultdict(collections.Counter)
+    moments = collections.defaultdict(list)
+    sets_up, blasts = [], []
+    for code, np_, pull, f, AB, names, m in GP:
+        if not pull: continue
+        for b in m['blasts']:
+            if alive_at(ctx, pull, b['t']) < RAID_UP: continue
+            S = next((S for S in m['sets'] if S['t0'] - 0.1 <= b['spawn'] <= S['t1'] + 0.1), None)
+            kind = f"set{[x for x in m['sets'] if x['kind'] == 'deluge'].index(S) + 1}" if S and S['kind'] == 'deluge' else 'deaths'
+            blasts.append(dict(pull=pull, t=b['t'], kind=kind, died=len(deaths_between(ctx, pull, b['t'] - 0.2, b['t'] + 3))))
+        for R in set_report(f, AB, names, m):
+            sets_up.append(dict(pull=pull, **{k: R[k] for k in ('k', 't0', 'n', 'blasts', 'sat')}, took=R['took']))
+            for nm in R['stayed']:
+                c = per[nm]; c['sets'] += 1; c['took'] += R['took'][nm]
+                if R['took'][nm] >= 1: c['rounds'] += 1
+                if R['took'][nm] >= 2: c['double'] += 1
+                if R['blasts']:
+                    c['blown_sets'] += 1
+                    if not R['took'][nm]:
+                        c['sat_blown'] += 1
+                        moments[nm].append(dict(pull=pull, t=min(R['blasts'])))
+        for t, nm, *_ in m['bwhits']:
+            if alive_at(ctx, pull, t) >= RAID_UP: per[nm]['knocked'] += 1
+    return per, moments, sets_up, blasts
+
+
+def player_notes(ctx):
+    """A Globules section for each player's report."""
+    GP = globule_pulls(ctx['nights'], ctx['gmap'])
+    if not GP: return []
+    per, moments, sets_up, blasts = globule_stats(ctx, GP)
+    P, f2 = ctx['P_by'], lambda s: f"{int(s // 60)}:{int(s % 60):02d}"
+    per_set = round(sum(S['n'] for S in sets_up) / max(1, len(sets_up)))
+    rates = sorted(c['rounds'] / c['sets'] for c in per.values() if c['sets'] >= 10)
+    med = rates[len(rates) // 2] if rates else 0
+    out = []
+    for nm, c in per.items():
+        if not c['sets']: continue
+        rate = c['rounds'] / c['sets']
+        stats = [dict(v=c['took'], l=f"Globules you grabbed, in {c['sets']} rounds you were alive for"),
+                 dict(v=f"{round(100 * rate)}%", l=f"of rounds you grabbed at least one (raid middle: {round(100 * med)}%)",
+                      tone='bad' if rate < 0.6 * med else 'ok' if rate >= med else '')]
+        if c['blown_sets']:
+            stats.append(dict(v=f"{c['sat_blown']} of {c['blown_sets']}", l='rounds where a Globule blew up and you hadn\'t grabbed one',
+                              tone='bad' if c['sat_blown'] / c['blown_sets'] >= 0.5 else 'ok' if not c['sat_blown'] else ''))
+        if c['knocked']: stats.append(dict(v=c['knocked'], l='times a shielded Globule knocked you back'))
+        if not c['blown_sets']:
+            verdict, tone = 'No Globule blew up in any round you were alive for.', 'ok'
+        elif not c['sat_blown']:
+            verdict, tone = 'Every time a Globule blew up, you had already grabbed one that round. Nice.', 'ok'
+        else:
+            verdict = (f"{c['sat_blown']} {'time' if c['sat_blown'] == 1 else 'times'} a Globule blew up in a round where you hadn't grabbed one.")
+            tone = 'bad' if c['sat_blown'] / c['blown_sets'] >= 0.5 else ''
+        if c['double']: verdict += f" You grabbed two in {c['double']} {'round' if c['double'] == 1 else 'rounds'}, covering for someone."
+        mo = sorted(moments[nm], key=lambda r: (r['pull'], r['t']))[:8]
+        out.append(dict(player=nm, title='Globules', tone=tone, verdict=verdict, stats=stats,
+                        lead=f"Each Caustic Deluge drops {per_set} Globules on the floor. Someone has to grab each one within 10 seconds, or it blows up on the whole raid. "
+                             f"With about 20 alive, {max(0, 20 - per_set)} people get each round off.",
+                        moments_title='Watch the rounds where one blew up and you hadn\'t grabbed one (starts 8 s before it blew up)',
+                        moments=[dict(pull=r['pull'], t=max(0, round(r['t'] - 8, 1)), label=f"{P[r['pull']]['label']} · {f2(r['t'])}") for r in mo],
+                        tip=("If you had that round off on purpose, ignore these. If not, grab the closest Globule as soon as they land. "
+                             "If it has a purple shield, wait for the stun or fear to break it, or it knocks you back.") if mo else None))
+    return out
 
 
 def issues(ctx, H):
@@ -459,24 +529,7 @@ def st_med(xs):
 def globule_card(ctx, H, GP, guide, cls):
     P, f2, N = ctx['P_by'], H['f2'], len(ctx['pulls'])
     role = {p['player']: p['role'] for p in ctx['players4']}
-    blasts, sets_up = [], []
-    per = collections.defaultdict(collections.Counter)
-    for code, np_, pull, f, AB, names, m in GP:
-        if not pull: continue
-        for b in m['blasts']:
-            al = alive_at(ctx, pull, b['t'])
-            if al < RAID_UP: continue
-            S = next((S for S in m['sets'] if S['t0'] - 0.1 <= b['spawn'] <= S['t1'] + 0.1), None)
-            kind = f"set{[x for x in m['sets'] if x['kind'] == 'deluge'].index(S) + 1}" if S and S['kind'] == 'deluge' else 'deaths'
-            blasts.append(dict(pull=pull, t=b['t'], kind=kind, died=len(deaths_between(ctx, pull, b['t'] - 0.2, b['t'] + 3))))
-        for R in set_report(f, AB, names, m):
-            sets_up.append(dict(pull=pull, **{k: R[k] for k in ('k', 't0', 'n', 'blasts', 'sat')}, took=R['took']))
-            for nm in R['stayed']:
-                c = per[nm]; c['sets'] += 1; c['took'] += R['took'][nm]
-                if R['took'][nm] >= 2: c['double'] += 1
-                if R['blasts']:
-                    c['blown_sets'] += 1
-                    if not R['took'][nm]: c['sat_blown'] += 1
+    per, moments, sets_up, blasts = globule_stats(ctx, GP)
     if not blasts and not sets_up: return []
     pulls_with = {b['pull'] for b in blasts}
     ended = [p for p in ctx['pulls'] if (ctx['bursts'].get(p['pull']) or {}).get('cause') == 'Caustic Globule']
@@ -484,48 +537,50 @@ def globule_card(ctx, H, GP, guide, cls):
     died3 = len({(b['pull'], d['t'], d['player']) for b in blasts for d in deaths_between(ctx, b['pull'], b['t'] - 0.2, b['t'] + 3)})
     blown_sets = [S for S in sets_up if S['blasts']]
     per_set = round(sum(S['n'] for S in sets_up) / max(1, len(sets_up)))
-    labels = {'set1': 'From the 1st Deluge (about 0:11)', 'set2': 'From the 2nd Deluge (about 1:12)', 'set3': 'From the 3rd Deluge (about 2:46)',
-              'set4': 'From the 4th Deluge', 'deaths': 'Dropped by people dying'}
+    labels = {'set1': '1st round of Globules (about 0:11)', 'set2': '2nd round (about 1:12)', 'set3': '3rd round (about 2:46)',
+              'set4': '4th round', 'deaths': 'Extra ones dropped when people died'}
     rows = []
     for key in ['set1', 'set2', 'set3', 'set4', 'deaths']:
         bs = [b for b in blasts if b['kind'] == key]
         if not bs: continue
         big = max(bs, key=lambda b: b['died'])
         rows.append(dict(label=labels[key], desc=f"{len({b['pull'] for b in bs})} pulls · {sum(b['died'] for b in bs)} died within 3 s",
-                         value=len(bs), max=len(blasts), num=f'{len(bs)} went off', go=dict(pull=big['pull'], t=max(0, round(big['t'] - 8, 1)))))
+                         value=len(bs), max=len(blasts), num=f'{len(bs)} blew up', go=dict(pull=big['pull'], t=max(0, round(big['t'] - 8, 1)))))
     tag = lambda nm: f" ({role[nm].lower()})" if role.get(nm) in ('Tank', 'Healer') else ''
     sat = sorted((nm for nm in per if per[nm]['blown_sets'] >= 3), key=lambda nm: (-per[nm]['sat_blown'] / per[nm]['blown_sets'], -per[nm]['sat_blown']))
-    sat_rows = [dict(label=nm + tag(nm), desc=f"took {per[nm]['took']} Globules in {per[nm]['sets']} sets ({per[nm]['took'] / per[nm]['sets']:.2f} a set)",
-                     value=per[nm]['sat_blown'], max=per[nm]['blown_sets'], num=f"{per[nm]['sat_blown']} of {per[nm]['blown_sets']} sets")
+    sat_rows = [dict(label=nm + tag(nm), desc=f"grabbed {per[nm]['took']} Globules in {per[nm]['sets']} rounds",
+                     value=per[nm]['sat_blown'], max=per[nm]['blown_sets'], num=f"{per[nm]['sat_blown']} of {per[nm]['blown_sets']} times")
                 for nm in sat[:10]]
-    rate = sorted((nm for nm in per if per[nm]['sets'] >= 10), key=lambda nm: per[nm]['took'] / per[nm]['sets'])
+    rate = sorted((nm for nm in per if per[nm]['sets'] >= 10), key=lambda nm: per[nm]['rounds'] / per[nm]['sets'])
     most = sorted((nm for nm in per if per[nm]['sets'] >= 10), key=lambda nm: -per[nm]['took'] / per[nm]['sets'])
-    tr = H['trend'](ctx, lambda p: p['pull'] in pulls_with, 'Pulls where a Globule went off with the raid up')
+    pct_ = lambda nm: f"grabbed one in {round(100 * per[nm]['rounds'] / per[nm]['sets'])}% of rounds"
+    tr = H['trend'](ctx, lambda p: p['pull'] in pulls_with, 'Pulls where a Globule blew up with the raid up')
     top = max(rows, key=lambda r: r['value']) if rows else None
-    summary = (f"Each Caustic Deluge drops {per_set} Globules, one every third of a second, so with 20 alive only {max(0, 20 - per_set)} people sit a set out. "
-               f"A Globule nobody takes explodes 10 seconds after it lands, hits everyone and gives the whole raid a stack. "
-               f"With the raid still up, {len(blasts)} went off in {len(pulls_with)} of {N} pulls ({len(blown_sets)} of {len(sets_up)} Deluges), "
-               f"and {died3} people died within 3 seconds of one. Caustic Globule caused {cg_deaths} of the {len(ctx['deaths'])} deaths and ended {len(ended)} pulls."
-               + (f" The most came {top['label'].split(' (')[0][0].lower() + top['label'].split(' (')[0][1:]}: {top['value']}." if top else ''))
+    summary = (f"Every Caustic Deluge drops {per_set} Globules on the floor. Someone has to grab each one within 10 seconds, or it blows up, "
+               f"hits the whole raid and gives everyone a stack. With about 20 of us alive, only {max(0, 20 - per_set)} people get a round off. "
+               f"With the raid still up, {len(blasts)} Globules blew up in {len(pulls_with)} of {N} pulls, and {died3} people died within 3 seconds of one. "
+               f"Globules killed {cg_deaths} people in all and ended {len(ended)} pulls."
+               + (f" Most of them were in the {top['label'].split(' (')[0].replace('round of Globules', 'round').lower()}: {top['value']}." if top and top['label'][0].isdigit() else ''))
     worst, seen = [], set()
     for b in sorted(blasts, key=lambda b: -b['died']):
         if (b['pull'], b['kind']) in seen: continue
         seen.add((b['pull'], b['kind'])); worst.append(b)
-    worst = worst[:4]
     return [dict(
         key='globules', replaces=['cause-Caustic Globule', 'holder-Eternal Venom', 'holder-Caustic Globule'], cause='Caustic Globule',
-        title='Globules are going off unsoaked', big=str(len(blasts)), big_lbl=f'Globules exploded with the raid up, in {len(pulls_with)} of {N} pulls',
+        title="Globules nobody grabbed", big=str(len(blasts)), big_lbl=f'Globules blew up because nobody grabbed them ({len(pulls_with)} of {N} pulls)',
         summary=summary,
-        main=[dict(type='rows', title='Where the exploded Globules came from', rows=rows),
-              dict(type='rows', title='Sat out a Deluge where a Globule blew up (of the ones they were alive for)', rows=sat_rows),
-              dict(type='note', text=f"Who took each Globule comes straight from the log. Who was meant to take it doesn't: with {per_set} Globules a set, "
-                                     f"{max(0, 20 - per_set)} people sit out every time, so a name above isn't proof they skipped theirs. Check it against your soak list. "
-                                     f"In the replay, Globules show as green dots (dashed while the Bulwark is up), a green ring flashes on whoever takes one, "
-                                     f"and everyone who sat out a set where one blew up gets a red dashed ring.")],
-        side=[tr, dict(type='who', label='Fewest Globules taken per set (10+ sets alive)',
-                       items=[dict(player=nm, cls=cls.get(nm, ''), txt=f"{per[nm]['took'] / per[nm]['sets']:.2f} ({per[nm]['took']} in {per[nm]['sets']})") for nm in rate[:6]]),
-              dict(type='who', label='Most Globules taken per set (covering for others)',
-                   items=[dict(player=nm, cls=cls.get(nm, ''), txt=f"{per[nm]['took'] / per[nm]['sets']:.2f} ({per[nm]['double']} sets with 2+)") for nm in most[:4]])],
+        main=[dict(type='rows', title='When they blew up', rows=rows),
+              dict(type='rows', title="Hadn't grabbed one when a Globule blew up (out of the times it happened while they were alive)", rows=sat_rows),
+              dict(type='note', text=f"The log shows exactly who grabbed every Globule. It doesn't know who was supposed to: with {per_set} Globules and about 20 people, "
+                                     f"{max(0, 20 - per_set)} people get each round off. Check these names against your soak list before calling anyone out. "
+                                     f"Everyone can see their own Globule numbers on the Your report tab. "
+                                     f"In the replay, green circles are Globules on the floor (the ring around each one is the time left before it blows up), "
+                                     f"purple ones still have a shield, a green ring on a player means they just grabbed one, and a red dashed ring marks "
+                                     f"everyone who hadn't grabbed one when a Globule blew up.")],
+        side=[tr, dict(type='who', label='Grab the fewest Globules',
+                       items=[dict(player=nm, cls=cls.get(nm, ''), txt=pct_(nm)) for nm in rate[:6]]),
+              dict(type='who', label='Grab the most (covering for others)',
+                   items=[dict(player=nm, cls=cls.get(nm, ''), txt=f"{per[nm]['took']} in {per[nm]['sets']} rounds" + (f", 2 in {per[nm]['double']}" if per[nm]['double'] else '')) for nm in most[:4]])],
         fixes=guide.get('Caustic Globule', {}).get('fixes', []),
-        examples=[dict(pull=b['pull'], t=max(0, round(b['t'] - 8, 1)), label=f"{P[b['pull']]['label']} · {f2(b['t'])} · {b['died']} died within 3 s") for b in worst],
+        examples=[dict(pull=b['pull'], t=max(0, round(b['t'] - 8, 1)), label=f"{P[b['pull']]['label']} · {f2(b['t'])} · {b['died']} died within 3 s") for b in worst[:4]],
         status=H['status'](tr), impact=len(ended) + 0.5)]

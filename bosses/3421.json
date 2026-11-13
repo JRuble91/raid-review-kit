@@ -26,13 +26,13 @@
     {
       "ability": "Took a Globule",
       "style": "ring",
-      "label": "Just took a Globule",
+      "label": "Just grabbed a Globule",
       "color": "var(--color-ok)"
     },
     {
       "ability": "No Globule this set",
       "style": "dash",
-      "label": "Took no Globule in a set where one blew up",
+      "label": "Hadn't grabbed one when a Globule blew up",
       "color": "var(--color-bad)"
     },
     {
@@ -87,16 +87,16 @@
       "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/the-twin-fangs/rouseTheBrood.mp4"
     },
     "Caustic Globule": {
-      "name": "Caustic Deluge → Caustic Globule",
+      "name": "Caustic Deluge → Globules",
       "group": "Stack soaks",
       "who": "Everyone",
-      "what": "Vexhul drops 15 Caustic Globules each set, one every third of a second (that's what the log shows). Walking over one takes it and gives only you an Eternal Venom stack. A Globule nobody takes explodes 10 seconds after it lands, hits everyone and gives the whole raid a stack. On Mythic some Globules have a Barbed Bulwark shield that knocks back anyone who touches it until crowd control breaks it, and a player who dies drops more Globules.",
-      "todo": "Every Globule gets taken within 10 seconds. With 15 a set only 5 people sit out, so if you're not on the sit-out list, take one.",
+      "what": "Vexhul drops 15 Globules on the floor each round, one every third of a second. Walking over one grabs it: only you get an Eternal Venom stack. A Globule nobody grabs blows up 10 seconds after it lands, hits everyone and gives the whole raid a stack. On Mythic some Globules have a purple shield (Barbed Bulwark) that knocks you back until a stun or fear breaks it, and anyone who dies drops more Globules.",
+      "todo": "Grab one every round unless you've been given the round off. 15 Globules for 20 people means only 5 sit out.",
       "fixes": [
-        "15 Globules a set means only 5 people sit out. Name those 5 each set (tanks, highest stacks) and everyone else takes one, every time.",
-        "Break the Barbed Bulwark with crowd control (stuns, fears) before the soaker walks in, or they get knocked back and the Globule explodes.",
-        "If you see a Globule still on the floor after you took yours, call it. It has 10 seconds from landing before it blows.",
-        "Deaths drop more Globules on Mythic. A death right before a set means extra Globules to cover."
+        "Name the 5 people who get each round off (tanks, highest stacks). Everyone else grabs one, every round.",
+        "Purple shield on it? Stun or fear it first, then grab it. Walking into the shield just knocks you back.",
+        "Already grabbed yours and see one still on the floor? Call it out. It blows up 10 seconds after it lands.",
+        "People dying drop extra Globules. If someone just died, look for the extras."
       ],
       "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/the-twin-fangs/causticDeluge.mp4",
       "clip2": "https://assets2.mythictrap.com/videos/venomous-abyss/the-twin-fangs/bloodTorrent.mp4"
@@ -221,19 +221,25 @@
   ],
   "replay_objects": [
     {
-      "label": "Globule, Bulwark still up",
+      "label": "Globule with a shield (stun or fear it first)",
       "style": "shield",
       "color": "#8a63d2"
     },
     {
-      "label": "Globule",
-      "style": "dot",
+      "label": "Globule on the floor (the ring is time left before it blows up)",
+      "style": "puddle",
       "color": "var(--color-ok)"
     },
     {
-      "label": "Globule exploded (nobody took it)",
+      "label": "Globule blew up",
       "style": "burst",
       "color": "var(--color-bad)"
+    },
+    {
+      "label": "Grabbed",
+      "style": "pop",
+      "color": "var(--color-ok)",
+      "hide_key": true
     }
   ]
 }

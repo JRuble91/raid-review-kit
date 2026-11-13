@@ -21,7 +21,7 @@ A profile makes the pages read better for one boss. Without one, everything is w
 | `enrage_title` | Title of the enrage wall. |
 | `enrage_soakers` | Who can do the mechanic that prevents the enrage, for the "enough alive" count: `{"roles": ["Melee", "Ranged", "Healer"], "max": {"Healer": 2}, "before": 8, "label": "soakers (DPS plus up to 2 healers)", "short": "soakers alive", "noun": "soakers"}`. `before` = seconds before the enrage to count at. Default: everyone alive at the enrage. |
 | `rings` | Debuffs to draw on the replay: `[{"ability": "Virulence", "style": "ring"}, {"ability": "Serpent's Fury", "style": "dash"}]`. Use `ring` for debuffs many people carry, `dash` for a single marked player. Default: picked from the logs. |
-| `arena` | `shape` (`circle`, `octagon` or `none`), `r` (edge radius in yards), `view` (half-width shown, in yards), `rotate` (degrees) or `rotate_to` (a debuff name: the replay is turned so where its first holder stood points up). `follow: true` starts the replay zoomed on the raid (about `follow_view` yards each side, default 30), for big rooms the raid moves around in. |
+| `arena` | `shape` (`circle`, `octagon` or `none`), `r` (edge radius in yards), `view` (half-width shown, in yards), `rotate` (degrees) or `rotate_to` (a debuff name: the replay is turned so where its first holder stood points up). `follow: true` starts the replay zoomed on the raid (about `follow_view` yards each side, default 30), for big rooms the raid moves around in. The replay draws the room map Warcraft Logs uses (collected with the replay); `map: false` turns it off. |
 | `checkpoint` | `{"t": 75, "alive": 17}`: the "N alive at time T" split used across the page. Default: T from the median 4th death, N = raid size − 3. |
 | `cause_alias` | Merge ability names, e.g. `{"Melee": "Boss melee"}`. |
 | `events.major` | Boss abilities to show on the timeline and replay. Default: the boss's regular casts linked to the most deaths. |
@@ -47,6 +47,7 @@ A plugin is for a boss-specific check that the generic detectors can't do. On Ss
 
 - Write `def issues(ctx, H): return [cards]` in `bosses/<id>.py`. Cards use the format at the top of `rrlib/issues.py`.
 - A card with `"replaces": "cause-<Ability>"` (or a list of keys) removes those generic cards.
+- `player_notes(ctx)` adds sections to each player's Your report tab: `[{player, title, lead, stats: [{v, l, tone}], verdict, tone, moments: [{pull, t, label}], moments_title, tip}]`. `bosses/3421.py` adds a Globules section.
 - Each night in `ctx['nights']` has `src`, the path of its raw `.wcl.json`, for checks that need per-event detail (stack counts, extra files next to it). `bosses/3421.py` reads it.
 - `ctx` holds the merged pulls, deaths, debuff windows, boss events, the wipe bursts and the raw replay positions.
 - `H` holds helpers: `trend`, `status`, `who`, `ex`, `f2`, `pct` and `num`.
