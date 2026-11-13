@@ -241,7 +241,7 @@ def player_notes(ctx):
         if c['blown_sets']:
             stats.append(dict(v=f"{c['sat_blown']} of {c['blown_sets']}", l='rounds where a Globule blew up and you hadn\'t grabbed one',
                               tone='bad' if c['sat_blown'] / c['blown_sets'] >= 0.5 else 'ok' if not c['sat_blown'] else ''))
-        if c['knocked']: stats.append(dict(v=c['knocked'], l='times a shielded Globule knocked you back'))
+        if c['knocked']: stats.append(dict(v=c['knocked'], l=f"{'time' if c['knocked'] == 1 else 'times'} a shielded Globule knocked you back"))
         if not c['blown_sets']:
             verdict, tone = 'No Globule blew up in any round you were alive for.', 'ok'
         elif not c['sat_blown']:
