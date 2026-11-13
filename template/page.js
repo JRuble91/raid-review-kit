@@ -499,6 +499,28 @@ function drawReport() {
   $('rp-score-stat').hidden = me.score == null;
   if (me.score != null) { $('rp-score').textContent = me.score; $('rp-best').textContent = Math.max(...scored.map((p) => p.score)); }
 
+  // boss-specific sections from the plugin (e.g. Twin Fangs Globules)
+  const nb = $('rp-notes'); nb.replaceChildren();
+  const pn = dash.data('player_notes');
+  for (const n of (pn.status === 'ok' ? pn.data : []).filter((r) => r.player === player)) {
+    const card = el('div', 'card rp-note'); card.appendChild(el('h2', null, n.title));
+    if (n.lead) card.appendChild(el('p', 'note', n.lead));
+    if (n.stats && n.stats.length) {
+      const sr = el('div', 'stat-row');
+      for (const st_ of n.stats) { const d = el('div', 'stat' + (st_.tone ? ' ' + st_.tone : '')); d.append(el('div', 'v', String(st_.v)), el('div', 'l', st_.l)); sr.appendChild(d); }
+      card.appendChild(sr);
+    }
+    if (n.verdict) { const v = el('p', 'rp-verdict' + (n.tone ? ' ' + n.tone : ''), n.verdict); card.appendChild(v); }
+    if (n.moments && n.moments.length) {
+      card.appendChild(el('div', 'sub', n.moments_title || 'Watch them'));
+      const chips = el('div', 'chips');
+      for (const mo of n.moments) { const b = el('button', 'chip-btn', `▶ ${mo.label}`); b.addEventListener('click', () => openReplay(mo.pull, mo.t)); chips.appendChild(b); }
+      card.appendChild(chips);
+    }
+    if (n.tip) { const tp = el('p', 'note', n.tip); card.appendChild(tp); }
+    nb.appendChild(card);
+  }
+
   const cb = $('rp-causes'); cb.replaceChildren();
   const mine = pcs.data.filter((r) => r.player === player && r.cutoff === cutoff);
   if (!mine.length) cb.appendChild(el('div', 'empty', 'No counted deaths. Nice.'));
@@ -624,9 +646,9 @@ const ringColor = (i) => { const r = (M().rings || [])[i]; if (!r) return 'var(-
 const objStyle = (k) => ((M().objects || [])[k] || {}).style || 'dot';
 const objLabel = (k) => ((M().objects || [])[k] || {}).label || '';
 const objColor = (k) => ((M().objects || [])[k] || {}).color || 'var(--cds-chart-muted)';
-function objPath(style, r0) {
-  const r = style === 'shield' ? r0 * 1.25 : style === 'burst' ? r0 * 1.6 : r0 * 0.95;
-  if (style === 'dot' || style === 'shield') return `M0,${-r}L${r},0L0,${r}L${-r},0Z`;   // diamonds, so they don't read as players
+function objPath(style, r0, age = 0) {
+  const r = style === 'shield' || style === 'puddle' ? r0 * 1.45 : style === 'burst' ? r0 * 2.2 : style === 'pop' ? r0 * (1.4 + 1.6 * age) : r0 * 0.95;
+  if (style === 'dot') return `M0,${-r}L${r},0L0,${r}L${-r},0Z`;   // diamonds, so they don't read as players
   if (style === 'burst') return d3.range(16).map((i) => { const rr = i % 2 ? r * 0.45 : r; const a = (i * Math.PI) / 8; return (i ? 'L' : 'M') + (rr * Math.cos(a)).toFixed(2) + ',' + (rr * Math.sin(a)).toFixed(2); }).join('') + 'Z';
   return `M${-r},0A${r},${r} 0 1,0 ${r},0A${r},${r} 0 1,0 ${-r},0Z`;
 }
@@ -645,7 +667,7 @@ function rpFrames(row) {
     let fx = NaN, fy = NaN;
     for (let s = n - 1; s >= 0; s--) { const i = (s * N + a) * 2; if (Number.isNaN(xy[i])) { xy[i] = fx; xy[i + 1] = fy; } else { fx = xy[i]; fy = xy[i + 1]; } }
   }
-  const f = { A, N, n, xy, nb: Number(row.boss_actors) || 0, rings: JSON.parse(row.rings || '[]'), objs: JSON.parse(row.objs || '[]'), notes: JSON.parse(row.notes || '[]') };
+  const f = { A, N, n, xy, nb: Number(row.boss_actors) || 0, rings: JSON.parse(row.rings || '[]'), objs: JSON.parse(row.objs || '[]'), notes: JSON.parse(row.notes || '[]'), map: row.map ? JSON.parse(row.map) : null };
   RP.cache.set(row.pull, f); return f;
 }
 const rpPos = (f, a, t) => {
@@ -691,8 +713,35 @@ function rpBuild(box, C, W) {
   const Z = { z: 1, cx: 0, cy: 0 };
   const X = (v) => W / 2 + (v - Z.cx) * s * Z.z; const Y = (v) => W / 2 - (v - Z.cy) * s * Z.z;
   const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${W}`).attr('height', '100%').attr('role', 'img').attr('aria-label', `Replay of ${PL(C.pull)}`);
+  // the room map from Warcraft Logs, under everything
+  // The room map from Warcraft Logs, painted on a canvas that only ever draws the visible part of the map image
+  // (Chrome won't paint an SVG <image> blown up to 10,000+ px). Drawing a cross-site image on a canvas is fine as long as we never read it back.
+  const mp = C.f.map; let mapCv = null, mapImg = null;
+  if (mp && mp.url) {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const fo = svg.append('foreignObject').attr('x', 0).attr('y', 0).attr('width', W).attr('height', W).attr('class', 'rp-mapfo');
+    mapCv = fo.append('xhtml:canvas').attr('width', Math.round(W * dpr)).attr('height', Math.round(W * dpr)).style('width', W + 'px').style('height', W + 'px').style('display', 'block').node();
+    mapImg = new Image(); mapImg.onload = () => { if (RP.ctx && RP.ctx.view) RP.ctx.view.drawArena(); };
+    mapImg.onerror = () => { fo.remove(); svg.select('.rp-mapveil').remove(); mapCv = null; };
+    mapImg.src = mp.url;
+    // no CSS filter on the map: a translucent veil keeps the dots readable instead
+    svg.append('rect').attr('class', 'rp-mapveil').attr('width', W).attr('height', W);
+  }
+  const paintMap = () => {
+    if (!mapCv || !mapImg || !mapImg.complete || !mapImg.naturalWidth) return;
+    const g = mapCv.getContext('2d'); const cw = mapCv.width; const k = cw / W * s * Z.z;   // canvas px per yard
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cw, cw);
+    // world (x, y) -> canvas (k * (x - left), k * (top - y)); work in (x, -y)
+    g.setTransform(k, 0, 0, k, -(Z.cx - W / 2 / (s * Z.z)) * k, (Z.cy + W / 2 / (s * Z.z)) * k);
+    if (mp.rot) g.rotate((-mp.rot * Math.PI) / 180);
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(mapImg, mp.x0, -mp.y1, mp.x1 - mp.x0, mp.y1 - mp.y0);
+  };
   const arenaG = svg.append('g');
-  const drawArena = () => { arenaG.selectAll('*').remove(); arenaParts(arenaG, C, edge, R, X, Y, s * Z.z, W); };
+  const drawArena = () => {
+    paintMap();
+    arenaG.selectAll('*').remove(); arenaParts(arenaG, C, mp && mp.url ? { ...edge, shape: 'none' } : edge, R, X, Y, s * Z.z, W);
+  };
   return rpBuildRest(box, C, W, svg, { X, Y, s, Z, R, drawArena });
 }
 
@@ -786,16 +835,26 @@ function rpDraw() {
     .attr('fill', (d) => `color-mix(in srgb, ${ringColor(d.ri)} 16%, transparent)`).attr('stroke', (d) => ringColor(d.ri)).attr('stroke-width', 2);
   V.layers.dash.selectAll('circle').data(dashPts, (d) => d.key).join('circle').attr('cx', (d) => d.px).attr('cy', (d) => d.py).attr('r', r0 + 9)
     .attr('fill', 'none').attr('stroke', (d) => ringColor(d.ri)).attr('stroke-width', 1.5).attr('stroke-dasharray', '3 3');
-  // plugin markers (e.g. Globules): [kind, x, y, start, end, label]
-  const ob = (f.objs || []).map((o, i) => ({ i, k: o[0], x: V.X(o[1]), y: V.Y(o[2]), s: o[3], e: o[4], lab: o[5] })).filter((o) => o.s <= t && t <= o.e);
-  const og = V.layers.objs.selectAll('g.ob').data(ob, (d) => d.i).join((en) => { const g = en.append('g').attr('class', 'ob'); g.append('path'); g.append('title'); return g; });
+  // plugin markers (e.g. Globules): [kind, x, y, start, end, label, fuse end, fuse start]
+  const ob = (f.objs || []).map((o, i) => ({ i, k: o[0], st: objStyle(o[0]), x: V.X(o[1]), y: V.Y(o[2]), s: o[3], e: o[4], lab: o[5], fe: o[6], fs: o[7] })).filter((o) => o.s <= t && t <= o.e);
+  const og = V.layers.objs.selectAll('g.ob').data(ob, (d) => d.i).join((en) => { const g = en.append('g').attr('class', 'ob'); g.append('path').attr('class', 'body'); g.append('path').attr('class', 'fuse'); g.append('text'); g.append('title'); return g; });
   og.attr('transform', (d) => `translate(${d.x},${d.y})`);
   og.select('title').text((d) => d.lab || objLabel(d.k));
-  og.select('path').attr('d', (d) => objPath(objStyle(d.k), r0))
-    .attr('fill', (d) => (objStyle(d.k) === 'shield' ? `color-mix(in srgb, ${objColor(d.k)} 22%, transparent)` : objColor(d.k)))
-    .attr('stroke', (d) => (objStyle(d.k) === 'shield' ? objColor(d.k) : 'color-mix(in srgb, var(--color-fg) 55%, transparent)'))
-    .attr('stroke-width', (d) => (objStyle(d.k) === 'shield' ? 1.6 : 0.8)).attr('stroke-dasharray', (d) => (objStyle(d.k) === 'shield' ? '2 2' : null))
-    .attr('opacity', (d) => (objStyle(d.k) === 'burst' ? Math.max(0.25, 1 - (t - d.s) / Math.max(0.5, d.e - d.s)) : 0.95));
+  const age = (d) => Math.max(0, Math.min(1, (t - d.s) / Math.max(0.3, d.e - d.s)));
+  og.select('path.body').attr('d', (d) => objPath(d.st, r0, age(d)))
+    .attr('fill', (d) => (d.st === 'shield' ? `color-mix(in srgb, ${objColor(d.k)} 30%, transparent)` : d.st === 'pop' ? 'none' : d.st === 'puddle' ? `color-mix(in srgb, ${objColor(d.k)} 70%, transparent)` : objColor(d.k)))
+    .attr('stroke', (d) => (d.st === 'shield' || d.st === 'pop' ? objColor(d.k) : 'color-mix(in srgb, var(--color-fg) 60%, transparent)'))
+    .attr('stroke-width', (d) => (d.st === 'shield' ? 2 : d.st === 'pop' ? 2.5 : 1)).attr('stroke-dasharray', (d) => (d.st === 'shield' ? '3 2' : null))
+    .attr('opacity', (d) => (d.st === 'burst' || d.st === 'pop' ? Math.max(0.15, 1 - age(d)) : 1));
+  // fuse: how long until it blows up, shrinking around the Globule (turns red in the last 3 s)
+  og.select('path.fuse').attr('d', (d) => {
+    if (!d.fe || !(d.st === 'puddle' || d.st === 'shield')) return null;
+    const left = Math.max(0, Math.min(1, (d.fe - t) / Math.max(1, d.fe - (d.fs ?? d.s)))); const rr = r0 * 1.55 + 2;
+    return d3.arc()({ innerRadius: rr, outerRadius: rr + 2.4, startAngle: 0, endAngle: 2 * Math.PI * left });
+  }).attr('fill', (d) => (d.fe && d.fe - t < 3 ? 'var(--color-bad)' : 'var(--color-fg)')).attr('opacity', 0.75);
+  og.select('text').text((d) => (d.st === 'pop' || d.st === 'burst' ? d.lab : '')).attr('y', -r0 * 2.2).attr('text-anchor', 'middle')
+    .attr('fill', (d) => (d.st === 'burst' ? 'var(--color-bad)' : 'var(--color-fg)')).attr('stroke', 'var(--color-panel)').attr('stroke-width', 3).attr('paint-order', 'stroke')
+    .style('font-size', 'var(--cds-font-size-caption)').style('font-weight', 'var(--cds-font-weight-medium)').attr('opacity', (d) => Math.max(0.2, 1 - age(d) * 0.8));
   const xs = r0 * 0.85;
   V.layers.dead.selectAll('path').data(dead, (d) => d.name).join('path').attr('d', (d) => `M${d.px - xs},${d.py - xs}L${d.px + xs},${d.py + xs}M${d.px + xs},${d.py - xs}L${d.px - xs},${d.py + xs}`)
     .attr('stroke', (d) => causeColor(d.dead.cause)).attr('stroke-width', (d) => (d.me ? 3.5 : 2.4)).attr('stroke-linecap', 'round').attr('opacity', (d) => (d.me || !follow ? 0.95 : 0.7));
@@ -897,7 +956,8 @@ function drawKey() {
   const add = (cls, text, color) => { const s = el('span'); const i = el(cls === 'x' ? 'b' : 'i', cls === 'x' ? 'k-x' : cls, cls === 'x' ? '✕' : null); if (color) i.style.setProperty('--k', color); s.append(i, text); box.appendChild(s); };
   add('k-dot', 'Raider, in class color'); add('k-boss', 'Boss');
   (M().rings || []).forEach((r, i) => add(r.style === 'dash' ? 'k-dash2' : 'k-ring', ringLabel(r), ringColor(i)));
-  (M().objects || []).forEach((o, k) => add(o.style === 'burst' ? 'k-burst' : o.style === 'shield' ? 'k-shield' : 'k-obj', o.label, objColor(k)));
+  (M().objects || []).filter((o) => !o.hide_key).forEach((o) => { const k = M().objects.indexOf(o); add(o.style === 'burst' ? 'k-burst' : o.style === 'shield' ? 'k-shield' : o.style === 'puddle' ? 'k-puddle' : o.style === 'pop' ? 'k-ring' : 'k-obj', o.label, objColor(k)); });
+  if (RP.ctx && RP.ctx.f && RP.ctx.f.map) add('k-map', 'Room map from Warcraft Logs');
   add('x', 'Died, colored by what killed them');
 }
 
