@@ -190,6 +190,7 @@
           R.center = [Math.round((j.minX + j.maxX) / 2), Math.round((j.minY + j.maxY) / 2)];
           R.markers = (j.worldMarkers || []).map((m) => [m.icon, m.x, m.y]);
         }
+        if (!R.maps && j.maps) R.maps = j.maps.map((m) => ({ id: m.mapID, file: m.mapFile || null, name: m.name, minX: m.mapMinX, maxX: m.mapMaxX, minY: m.mapMinY, maxY: m.mapMaxY }));
         for (const ev of j.events || []) {
           if (ev.x == null) continue;
           const id = ev.resourceActor === 2 ? ev.targetID : ev.sourceID;
