@@ -153,6 +153,17 @@ def normalize_wf(WF, id2name, n_pulls, fight_ids):
 
 
 # ---------------------------------------------------------------- profile
+def plugin_call(profile, fn, *args):
+    """Call fn from the boss plugin (bosses/<id>.py) if it has one."""
+    plug = profile.get('_plugin')
+    if not plug: return None
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('boss_plugin_' + fn, plug)
+    mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+    f = getattr(mod, fn, None)
+    return f(*args) if f else None
+
+
 def load_profile(encounter, kit_dir):
     p = os.path.join(kit_dir, 'bosses', f'{encounter}.json')
     prof = json.load(open(p)) if os.path.exists(p) else {}
@@ -306,8 +317,11 @@ def page_data(nights, profile, guild='', kit_dir='.'):
             bursts[p['pull']] = dict(t=best[0], kind='cause', cause=c, deaths=best[1])
     walls = make_walls(bursts, E_by, P_by, profile, canon, major)
 
-    # ---- replay
-    replay, arena = build_replay(nights, gmap, rings, profile)
+    # ---- replay (a boss plugin can add rings, markers and feed notes: replay_extras(nights, gmap, profile))
+    extras = plugin_call(profile, 'replay_extras', nights, gmap, profile) or {}
+    for n in nights:
+        n['debuffs'] = n['debuffs'] + [d for d in extras.get('debuffs', {}).get(n['code'], [])]
+    replay, arena = build_replay(nights, gmap, rings, profile, extras)
 
     # ---- Wipefest mechanics
     mechanics4, mechanic_players4 = wipefest_tables(nights, labels, players4)
@@ -316,7 +330,7 @@ def page_data(nights, profile, guild='', kit_dir='.'):
                 titles=[n['title'] for n in nights], multi=multi, n_pulls=N, roster_size=roster_size, kills=sum(1 for p in pulls if p['kill']),
                 checkpoint=dict(t=cp_t, alive=cp_alive), stages=stage_names, causes=causes, cause_alias=cause_alias,
                 stage_tile=profile.get('stage_tile'), has_wipefest=bool(mechanics4), rings=rings, major=major,
-                encounter=nights[-1]['encounter'])
+                objects=profile.get('replay_objects', []), encounter=nights[-1]['encounter'])
     data = dict(
         meta=meta,
         wcl_pulls=[dict(pull=p['pull'], fight_id=p['fight_id'], start_time=p['clock'], duration_s=p['duration_s'], boss_pct=p['boss_pct'], kill=p['kill'],
@@ -469,7 +483,7 @@ def guide_cards(causes, profile, deaths, D_by, pulls, canon):
     return out
 
 
-def build_replay(nights, gmap, rings, profile):
+def build_replay(nights, gmap, rings, profile, extras=None):
     """Re-center every night's positions on the fight, turn them if the profile says so, and pack as int8 per second."""
     rot = math.radians(profile.get('arena', {}).get('rotate', 0))
     cr, sr = math.cos(rot), math.sin(rot)
@@ -540,12 +554,20 @@ def build_replay(nights, gmap, rings, profile):
             for ri, r in enumerate(rings):
                 for d in n['debuffs']:
                     if d['np'] == np_ and d['ability'] == r['ability']: rg.append([d['player'], ri, d['s'], d['e']])
+            # plugin markers: [kind, x, y, start, end, label] in Warcraft Logs map units, moved onto this view
+            objs = []
+            for k, ox, oy, s0, s1, lab in (extras or {}).get('objects', {}).get((n['code'], np_), []):
+                X, Y = (ox - R['center'][0]) / 100.0 - cx, (oy - R['center'][1]) / 100.0 - cy
+                objs.append([k, round(X * cr - Y * sr, 1), round(X * sr + Y * cr, 1), s0, s1, lab])
+            notes = (extras or {}).get('notes', {}).get((n['code'], np_), [])
             rows.append(dict(pull=pull, seconds=secs, actors='|'.join(R['actors']), boss_actors=R.get('boss_actors', 0), unit=unit,
-                             pos=base64.b64encode(bytes(buf)).decode(), rings=json.dumps(rg, ensure_ascii=False)))
+                             pos=base64.b64encode(bytes(buf)).decode(), rings=json.dumps(rg, ensure_ascii=False),
+                             objs=json.dumps(objs, ensure_ascii=False), notes=json.dumps(notes, ensure_ascii=False)))
     rows.sort(key=lambda r: r['pull'])
     MN = {1: 'Star', 2: 'Circle', 3: 'Diamond', 4: 'Triangle', 5: 'Moon', 6: 'Square', 7: 'Cross', 8: 'Skull'}
     arena_cfg = profile.get('arena', {})
-    arena = [dict(kind='edge', name='Edge', icon=0, x=0, y=0, r=arena_cfg.get('r', round(edge, 1)), shape=arena_cfg.get('shape', 'circle'), view=round(arena_cfg.get('view', view), 1))]
+    arena = [dict(kind='edge', name='Edge', icon=0, x=0, y=0, r=arena_cfg.get('r', round(edge, 1)), shape=arena_cfg.get('shape', 'circle'), view=round(arena_cfg.get('view', view), 1),
+                  follow=bool(arena_cfg.get('follow')), follow_view=arena_cfg.get('follow_view', 30))]
     for (code, ic, x, y), c in markers.items():
         if ic in MN and abs(x) <= view and abs(y) <= view:
             arena.append(dict(kind='marker', name=MN[ic], icon=ic, x=x, y=y, r=0, code=code))
