@@ -26,6 +26,9 @@ A profile makes the pages read better for one boss. Without one, everything is w
 | `cause_alias` | Merge ability names, e.g. `{"Melee": "Boss melee"}`. |
 | `events.major` | Boss abilities to show on the timeline and replay. Default: the boss's regular casts linked to the most deaths. |
 | `walls` | Hand-written wipe walls, to replace the automatic ones (see `walls_def` in a built page for the shape). |
+| `phase_marks` | For a boss whose log has no phases: `{"ability": "Vile Flood", "names": ["After Submerge 1", ...]}`. Each cast of that ability starts a new stage, so `stages` and the timeline bands work. |
+| `cast_gap` | `{ability: seconds}`: keep one cast per burst, for channels that log a cast every tick (Twin Fangs' Caustic Deluge). |
+| `wall_after` | `{cause: event}`: name the trigger on that cause's wipe wall when the automatic pick (the commonest event in the 12 s before) is the wrong one. |
 | `sources` | Links to the guides you used. |
 
 ## Writing one for a new boss
@@ -41,7 +44,8 @@ A profile makes the pages read better for one boss. Without one, everything is w
 A plugin is for a boss-specific check that the generic detectors can't do. On Sszorak, the plugin checks whether Crosswinds launches set off Cyst wipes.
 
 - Write `def issues(ctx, H): return [cards]` in `bosses/<id>.py`. Cards use the format at the top of `rrlib/issues.py`.
-- A card with `"replaces": "cause-<Ability>"` removes the generic card for that cause.
+- A card with `"replaces": "cause-<Ability>"` (or a list of keys) removes those generic cards.
+- Each night in `ctx['nights']` has `src`, the path of its raw `.wcl.json`, for checks that need per-event detail (stack counts, extra files next to it). `bosses/3421.py` reads it.
 - `ctx` holds the merged pulls, deaths, debuff windows, boss events, the wipe bursts and the raw replay positions.
 - `H` holds helpers: `trend`, `status`, `who`, `ex`, `f2`, `pct` and `num`.
 - Only claim what the numbers show. The Sszorak plugin only calls Crosswinds the trigger when the data supports it.

@@ -1,0 +1,208 @@
+{
+  "boss": "The Twin Fangs",
+  "zone": "The Venomous Abyss",
+  "notes": "Ithraz and Vexhul. No phases in the logs, so stages are counted from Vile Flood (Vexhul's Submerge). Tips come from the Method and Mythic Trap Mythic guides.",
+  "phase_marks": {
+    "ability": "Vile Flood",
+    "names": [
+      "After Submerge 1",
+      "After Submerge 2",
+      "After Submerge 3"
+    ]
+  },
+  "stages": [
+    "Wiped before the first Submerge",
+    "Made it past Submerge 1",
+    "Made it past Submerge 2",
+    "Made it past Submerge 3"
+  ],
+  "stage_tile": "Reached the first Submerge",
+  "arena": {
+    "shape": "none"
+  },
+  "rings": [
+    {
+      "ability": "Coiling Ichor",
+      "style": "ring"
+    },
+    {
+      "ability": "Feasted",
+      "style": "ring"
+    },
+    {
+      "ability": "Blood Torrent",
+      "style": "dash"
+    }
+  ],
+  "cast_gap": {
+    "Caustic Deluge": 10
+  },
+  "wall_after": {
+    "Visceral Burst": "Rouse the Brood",
+    "Caustic Globule": "Caustic Deluge"
+  },
+  "events": {
+    "major": [
+      "Rouse the Brood",
+      "Caustic Deluge",
+      "Ravenous Feast",
+      "Stone Breaker",
+      "Stir the Depths",
+      "Venomous Emergence",
+      "Vile Flood",
+      "Coiling Ichor",
+      "Blood Torrent",
+      "Visceral Burst",
+      "Corrosive Spit",
+      "Clotted Bolt"
+    ]
+  },
+  "guide": {
+    "Visceral Burst": {
+      "name": "Rouse the Brood → Visceral Burst",
+      "group": "Mythic only · kicks",
+      "who": "Everyone with a kick",
+      "what": "Ithraz hits the raid and summons 10 Broodlings around the sides, one a second. Each one casts Visceral Burst, which hits the whole raid hard and stacks a DoT. Interrupting it sends the Broodling back into the water. The guides call this the main wipe on Mythic: one burst may be survivable, more than one usually isn't.",
+      "todo": "Every Broodling gets kicked. Know which side and which spawn is yours, and have a backup kick ready for the last few.",
+      "fixes": [
+        "Assign kicks by side and by spawn order, and put a marker on each side so every group knows its Broodlings.",
+        "Give every Broodling, 1st to 10th, a named kicker and a named backup whose kick is off cooldown. The bursts that got through came from all ten spots.",
+        "Tanks and melee help with the close ones. Protection Paladins can cover a lot of kicks on their own.",
+        "If a burst goes off, healers and personals straight away: the DoT it stacks is what kills people a few seconds later."
+      ],
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/the-twin-fangs/rouseTheBrood.mp4"
+    },
+    "Caustic Globule": {
+      "name": "Caustic Deluge → Caustic Globule",
+      "group": "Stack soaks",
+      "who": "Everyone",
+      "what": "Vexhul spreads 10 Caustic Globules each set. Walking over one soaks it and gives only you an Eternal Venom stack. A Globule nobody soaks explodes and gives the whole raid a stack, with big damage. On Mythic each Globule has a Barbed Bulwark shield that knocks back anyone who touches it until some crowd control breaks it, and a player who dies drops more Globules.",
+      "todo": "Every Globule gets soaked. Break the Bulwark with crowd control first, then the assigned player takes it. Nobody is spare: if your soaker is dead, you take it.",
+      "fixes": [
+        "Ten soakers per set, the other ten take the next set. Write it down and call it.",
+        "Break the Barbed Bulwark with crowd control (stuns, fears) before the soaker walks in, or they get knocked back and the Globule explodes.",
+        "Have one or two backup soakers per set for Globules whose soaker is dead or too high on stacks.",
+        "Deaths drop more Globules on Mythic. A death right before a set means extra Globules to cover."
+      ],
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/the-twin-fangs/causticDeluge.mp4",
+      "clip2": "https://assets2.mythictrap.com/videos/venomous-abyss/the-twin-fangs/bloodTorrent.mp4"
+    },
+    "Eternal Venom": {
+      "name": "Eternal Venom",
+      "group": "Stacks",
+      "who": "Everyone",
+      "what": "A DoT that never falls off and stacks. Globule soaks, Stir the Depths waves, Corrosive Spit and unsoaked Globules all add stacks. Ravenous Feast soaks take stacks off. Too many stacks kills you.",
+      "todo": "Keep your own stacks low: dodge every wave and spit line, soak only your assigned Globules, and say early when you're high.",
+      "fixes": [
+        "Dodge every Stir the Depths wave. They're the easiest stacks to avoid.",
+        "Call out high stacks early so the raid leader can pull you off the next soak.",
+        "Feast soaks remove stacks: send the highest-stack players into the Feast."
+      ]
+    },
+    "Ravenous Feast": {
+      "name": "Ravenous Feast",
+      "group": "Group soak",
+      "who": "Left, right and melee groups",
+      "what": "Ithraz smashes a big circle three times. Each hit needs at least four players in it, or the full hit lands on the raid. Feasted stops the same players soaking twice, so each hit needs a different group. Each smash takes an Eternal Venom stack off its soakers.",
+      "todo": "Right side takes the first hit, left side the second, melee the third. At least four in every hit.",
+      "fixes": [
+        "Right side soaks hit 1, left side hit 2, melee hit 3. Never fewer than four in a hit.",
+        "If your group lost people, fill it from another group before the Feast, not during it.",
+        "Melee avoid the knockback on hit 3 so they can soak Tainted Blood after."
+      ],
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/the-twin-fangs/ravenousFeast.mp4"
+    },
+    "Tainted Blood": {
+      "name": "Tainted Blood",
+      "group": "Mythic only · soaks after the Feast",
+      "who": "Players near each fount",
+      "what": "The Feast leaves blood founts for up to 8 seconds. Players within 5 yards soak them with a healing absorb. A fount that isn't fully absorbed explodes for heavy raid damage (Tainted Burst).",
+      "todo": "Stand on the founts until they're gone. Healers break the absorbs.",
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/the-twin-fangs/taintedBlood.mp4"
+    },
+    "Stone Breaker": {
+      "name": "Stone Breaker",
+      "group": "Tank soak",
+      "who": "Tanks",
+      "what": "Ithraz shoves nearby players away and marks three small circles. The tank has to soak all three smashes in order. A smash the tank misses hits the raid hard and knocks them back.",
+      "todo": "Tank: be in every one of the three circles, in order. Everyone else stays out of them.",
+      "fixes": [
+        "Tank: walk into all three circles in order, every time. Each one gives you a vulnerability, so plan your defensives around it.",
+        "Call the tank for every Stone Breaker. If the tank is dead or out of position, the other tank takes it.",
+        "Everyone else: you're getting shoved, so don't stand where the shove throws you into a wave or a Globule."
+      ],
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/the-twin-fangs/stoneBreaker.mp4"
+    },
+    "Caustic Deluge": {
+      "name": "Caustic Deluge",
+      "group": "Tank DoT",
+      "who": "Tank with Vexhul",
+      "what": "Vexhul puts a DoT on her tank and spreads the Globules around them. It also stacks Envenomed on the tank.",
+      "todo": "Tanks: watch your Envenomed stacks and swap or use a defensive."
+    },
+    "Stir the Depths": {
+      "name": "Stir the Depths",
+      "group": "Waves",
+      "who": "Everyone",
+      "what": "Raid-wide pulsing damage, and waves that cross the room. Each wave that hits you adds an Eternal Venom stack.",
+      "todo": "Dodge every wave. Treat each one as lethal later in the fight.",
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/the-twin-fangs/stirTheDepths.mp4"
+    },
+    "Corrosive Spit": {
+      "name": "Venomous Emergence → Corrosive Spit",
+      "group": "Snakes",
+      "who": "DPS",
+      "what": "Three Spawn of Vexhul come up and spit Corrosive Spit lines at players, adding Eternal Venom stacks.",
+      "todo": "Kill one snake straight away so it never spits, and the other two before their second spit. Dodge the lines.",
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/the-twin-fangs/venomousEmergence.mp4"
+    },
+    "Vile Flood": {
+      "name": "Submerge → Vile Flood",
+      "group": "Beam",
+      "who": "Everyone",
+      "what": "Vexhul submerges, comes up in the middle and spins a frontal beam. Orbs around her show which way it's turning. Swirlies (Sanguine Storm) fall at the same time.",
+      "todo": "Stand opposite the orbs, let the beam pass, then cross. Save movement speed for the Submerge.",
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/the-twin-fangs/vileFlood.mp4"
+    },
+    "Sanguine Storm": {
+      "name": "Sanguine Storm",
+      "group": "Swirlies",
+      "who": "Everyone",
+      "what": "Swirlies fall while Vile Flood is going.",
+      "todo": "Dodge the swirlies while you move away from the beam.",
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/the-twin-fangs/sanguineStorm.mp4"
+    },
+    "Coiling Ichor": {
+      "name": "Coiling Ichor",
+      "group": "Move out",
+      "who": "Marked players",
+      "what": "A few players get a circle and a DoT that grows over time. When it ends they leave a puddle under them.",
+      "todo": "Take it to the edge so the puddle lands out of the way.",
+      "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/the-twin-fangs/coilingIchor.mp4"
+    },
+    "Toxic Fumes": {
+      "name": "Toxic Fumes",
+      "group": "Raid damage",
+      "who": "Healers",
+      "what": "Constant raid damage for the whole fight. Deaths to it are people who were already low."
+    },
+    "Boss melee": {
+      "name": "Boss melee",
+      "group": "Tanks",
+      "who": "Tanks",
+      "what": "Melee hits from either boss. Non-tanks dying to it were standing in front of a boss.",
+      "todo": "Only tanks in front of the bosses."
+    },
+    "Clotted Bolt": {
+      "name": "Clotted Bolt",
+      "group": "Tanks",
+      "who": "Tanks",
+      "what": "Both bosses throw a bolt when no tank is in range of them.",
+      "todo": "Tanks stay in range of their boss."
+    }
+  },
+  "sources": [
+    "https://www.method.gg/guides/the-venomous-abyss/the-twin-fangs",
+    "https://www.mythictrap.com/en/venomous-abyss/the-twin-fangs/mythic"
+  ]
+}
