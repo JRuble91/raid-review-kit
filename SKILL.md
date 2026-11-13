@@ -56,6 +56,11 @@ For each report and boss, run these in the Warcraft Logs tab:
    - The link to a remote computer cuts single results off around 260K characters, so never dump the whole thing in one call.
 4. In the shell: `python3 kit/rr.py extract W<code> site/data/<code>-<encounter>-<difficulty>.wcl.json`. If it can't find the saved files, pass `--from <path>` with the path the tool printed.
 
+Boss extras. Some boss plugins read extra files collected next to the log. For **The Twin Fangs (3421)**, in the Warcraft Logs tab:
+1. `RR.collectKicks('<code>', 3421, <difficulty>)`, poll, dump with marker `K<code>`, extract to `site/data/<code>-3421-<difficulty>.kicks.json` (who kicked each Broodling, which bursts got off).
+2. `RR.collectGlobules('<code>', 3421, <difficulty>)`, poll, dump with marker `G<code>`, extract to `site/data/<code>-3421-<difficulty>.globules.json` (who took each Globule, which blew up, Bulwark positions for the replay). About 2 minutes for 35 pulls.
+Without them the page still builds, just without the kick card and the Globule replay layer.
+
 Then Wipefest. It's optional but adds mechanic ranks against other raids and per-player counts.
 1. Get the fight ids with `await RR.fightIds('<code>', <encounter>, <difficulty>)` in the Warcraft Logs tab.
 2. Open a second tab on `https://www.wipefest.gg/report/<code>` and load the collector there too.

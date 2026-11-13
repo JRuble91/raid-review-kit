@@ -235,6 +235,63 @@
     return out;
   });
 
+  /* ---------------- Boss extras (The Twin Fangs, 3421) ---------------- */
+  // RR.collectKicks(code, encounter, difficulty): every interrupt, and every Visceral Burst begin/finish per Broodling. Save as <code>-<enc>-<diff>.kicks.json.
+  RR.collectKicks = (code, encounter, difficulty, ability = 'Visceral Burst') => job(`kicks ${code} ${encounter}/${difficulty}`, async (J) => {
+    const rep = await get(`/reports/fights-and-participants/${code}/0`);
+    const nm = new Map([...rep.friendlies, ...rep.enemies, ...(rep.enemyPets || []), ...(rep.friendlyPets || [])].map((a) => [a.id, a.name]));
+    const owner = new Map((rep.friendlyPets || []).map((a) => [a.id, a.petOwner]));
+    const who = (id) => (owner.has(id) ? nm.get(owner.get(id)) : nm.get(id));
+    const fights = rep.fights.filter((f) => f.boss === encounter && f.difficulty === difficulty);
+    J.total = fights.length; const out = {};
+    for (const f of fights) {
+      const a = f.start_time, b = f.end_time, T = (ts) => Math.round((ts - a) / 100) / 10;
+      const ints = await paged((s, e) => `/reports/events/interrupts/${code}/${f.id}/${s}/${e}/source/0/0/0/0/0/0/-1.0.-1.-1/0/Any/Any/2`, a, b);
+      const casts = await paged((s, e) => `/reports/casts-events/${code}/${f.id}/${s}/${e}/0/0/Any/0/0/Any/0/1/-1.0.-1.-1/0/2`, a, b);
+      out[f.id] = {
+        ints: ints.filter((e) => e.type === 'interrupt').map((e) => [T(e.timestamp), who(e.sourceID) || '', e.ability && e.ability.name, e.extraAbility && e.extraAbility.name, nm.get(e.targetID) || '', e.targetInstance || 0]),
+        vb: casts.filter((e) => e.ability && e.ability.name === ability && (e.type === 'cast' || e.type === 'begincast')).map((e) => [T(e.timestamp), e.type === 'begincast' ? 1 : 0, e.sourceInstance || 0, e.sourceID]),
+      };
+      J.done++;
+    }
+    return out;
+  });
+  // RR.collectGlobules(code, encounter, difficulty): every Caustic Globule hit (who, where) and every Barbed Bulwark (where it spawned,
+  // when its shield came off), from the replay segments. Save as <code>-<enc>-<diff>.globules.json.
+  RR.collectGlobules = (code, encounter, difficulty) => job(`globules ${code} ${encounter}/${difficulty}`, async (J) => {
+    const rep = await get(`/reports/fights-and-participants/${code}/0`);
+    const nm = new Map([...rep.friendlies, ...rep.enemies].map((a) => [a.id, a.name]));
+    const bwIds = new Set(rep.enemies.filter((e) => e.name === 'Barbed Bulwark').map((e) => e.id));
+    const fights = rep.fights.filter((f) => f.boss === encounter && f.difficulty === difficulty);
+    J.total = fights.length; const out = {};
+    for (const f of fights) {
+      const a = f.start_time, b = f.end_time, T = (ts) => Math.round((ts - a) / 100) / 10;
+      const soaks = [], bw = {}, bwHits = [];
+      const segs = []; for (let s = a; s < b; s += 30000) segs.push([s, Math.min(b, s + 30000)]);
+      while (segs.length) {
+        const [s, e] = segs.shift(); let j;
+        try { j = await get(`/reports/replaysegment/${code}/${encounter}/${s}/${e}`); }
+        catch (err) { if (e - s > 8000) { const m = Math.floor((s + e) / 2); segs.unshift([s, m], [m, e]); continue; } J.log.push(`gap ${f.id} ${s}`); continue; }
+        for (const v of j.events || []) {
+          const ab = v.ability && v.ability.name;
+          if (ab === 'Caustic Globule' && v.type === 'damage') soaks.push([T(v.timestamp), nm.get(v.targetID) || String(v.targetID), v.x ?? null, v.y ?? null, v.amount || 0, v.absorbed || 0]);
+          const isSrc = bwIds.has(v.sourceID), isTgt = bwIds.has(v.targetID);
+          if (!isSrc && !isTgt) continue;
+          const inst = isSrc ? (v.sourceInstance || 1) : (v.targetInstance || 1);
+          const o = bw[inst] || (bw[inst] = { first: T(v.timestamp), last: T(v.timestamp), x: null, y: null, rm: null, died: null });
+          o.last = T(v.timestamp);
+          if (isSrc && v.x != null && o.x == null) { o.x = v.x; o.y = v.y; }
+          if (v.type === 'removebuff' && ab === 'Barbed Bulwark' && o.rm == null) o.rm = T(v.timestamp);
+          if (v.type === 'death' && isTgt) o.died = T(v.timestamp);
+          if (isSrc && v.type === 'damage' && ab === 'Barbed Bulwark') bwHits.push([T(v.timestamp), nm.get(v.targetID) || String(v.targetID), v.x ?? null, v.y ?? null]);
+        }
+      }
+      out[f.id] = { soaks, bw, bwHits };
+      J.done++;
+    }
+    return out;
+  });
+
   /* ---------------- Wipefest (run in a wipefest.gg tab) ---------------- */
   // RR.collectWipefest(code, encounterId, [fightIds], {cutoff: 4}) -> background job. Uses each insight's "first N deaths" interval when it has one.
   RR.collectWipefest = (code, encounter, fightIds, opts = {}) => job(`wipefest ${code} ${encounter}`, async (J) => {
