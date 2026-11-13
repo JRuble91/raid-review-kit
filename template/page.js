@@ -396,13 +396,15 @@ function drawMap() {
   const x = d3.scaleLinear([0, maxT], [mg.l, W - mg.r]);
   const y = (p) => mg.t + (p - 0.5) * rowH;
   bands(svg, x, mg.t - 4, H - mg.b, timeline, { opacity: 0.12 });
-  const lab = svg.append('g'); const ends = [-Infinity, -Infinity, -Infinity];
-  for (const b of timeline.slice().sort((p, q) => p.start_s - q.start_s)) {
+  // labels in three rows; phases and the boss's main abilities (profile order) get first pick of the space
+  const lab = svg.append('g'); const taken = [[], [], []];
+  const prio = (b) => (b.phase ? -1 : (b.lane ?? 99));
+  for (const b of timeline.slice().sort((p, q) => prio(p) - prio(q) || p.start_s - q.start_s)) {
     if (ui.focus && !hasKey(b, ui.focus)) continue;
     const t = lab.append('text').attr('x', x(b.start_s)).attr('fill', 'var(--color-fg-muted)').style('font-size', 'var(--cds-font-size-caption)').text(b.label);
     const tw = t.node().getComputedTextLength(); const x0 = Math.min(x(b.start_s), W - 4 - tw);
-    const lane = ends.findIndex((e) => x0 >= e + 8); if (lane < 0) { t.remove(); continue; }
-    t.attr('x', x0).attr('y', 12 + lane * 13); ends[lane] = x0 + tw;
+    const lane = taken.findIndex((iv) => iv.every(([a, z]) => x0 + tw + 8 <= a || x0 >= z + 8)); if (lane < 0) { t.remove(); continue; }
+    t.attr('x', x0).attr('y', 12 + lane * 13); taken[lane].push([x0, x0 + tw]);
   }
   const xa = svg.append('g').attr('transform', `translate(0,${H - mg.b})`).call(d3.axisBottom(x).tickValues(d3.range(0, maxT + 1, maxT > 360 ? 60 : W < 500 ? 30 : 15)).tickSize(0).tickFormat(f2));
   axisStyle(xa, true); xa.selectAll('text').attr('dy', '1em');
