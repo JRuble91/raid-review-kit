@@ -93,7 +93,7 @@ def load_night(wcl_path, wf_path=None):
             nm = W['phase_names'][pid - 1] if 0 < pid <= len(W['phase_names']) else f'Phase {pid}'
             phases.append(dict(np=i, t=t, phase=pid, name=nm))
     date = (fights[0].get('date') or '').strip()
-    night = dict(code=W['code'], title=W.get('title', ''), start=W.get('start'), encounter=W['encounter'], difficulty=W['difficulty'],
+    night = dict(src=os.path.abspath(wcl_path), code=W['code'], title=W.get('title', ''), start=W.get('start'), encounter=W['encounter'], difficulty=W['difficulty'],
                  boss=W['boss'], zone=W.get('zone', ''), boss_units=W.get('boss_units', []), phase_names=W.get('phase_names', []),
                  date=date, label=short_date(date), roster=roster, pulls=pulls, deaths=deaths, casts=casts, debuffs=debuffs, buffs=buffs, phases=phases,
                  replay=W.get('replay'), wf=normalize_wf(WF, {r['wcl_id']: r['player'] for r in roster}, len(pulls), [p['fight_id'] for p in pulls]) if WF else None)
@@ -179,6 +179,26 @@ def page_data(nights, profile, guild='', kit_dir='.'):
             pulls.append(dict(p, pull=g, night=lab, code=n['code'], label=f"{lab} pull {p['np']}" if multi else f"Pull {p['np']}"))
         for src, dst in ((n['deaths'], deaths), (n['casts'], casts), (n['debuffs'], debuffs), (n['buffs'], buffs), (n['phases'], phases)):
             for r in src: dst.append(dict(r, pull=gmap[(n['code'], r['np'])], night=lab))
+    # profile `cast_gap`: {ability: seconds}. Keep one cast per burst of that ability (channels that log a cast every tick)
+    for ab_, gap in profile.get('cast_gap', {}).items():
+        last_, keep = {}, []
+        for c in sorted(casts, key=lambda c: (c['pull'], c['t'])):
+            if c['ability'] == ab_:
+                prev = last_.get(c['pull'], -1e9); last_[c['pull']] = c['t']
+                if c['t'] - prev < gap: continue
+            keep.append(c)
+        casts[:] = keep
+    # bosses with no phases in the log: a profile can mark stages by a boss cast (profile `phase_marks`)
+    pm = profile.get('phase_marks')
+    if pm and not any(p['phase_seq'] for p in pulls):
+        names_ = pm.get('names', [])
+        for p in pulls:
+            ts = []
+            for c in sorted((c for c in casts if c['pull'] == p['pull'] and c['ability'] == pm['ability']), key=lambda c: c['t']):
+                if not ts or c['t'] - ts[-1] > pm.get('gap', 20): ts.append(c['t'])
+            p['phase_seq'] = list(range(1, len(ts) + 2)); p['phase_times'] = [0.0] + ts
+            for k, t in enumerate(ts):
+                phases.append(dict(np=p['np'], t=t, phase=k + 2, name=names_[k] if k < len(names_) else f"{pm['ability']} {k + 1}", pull=p['pull'], night=p['night']))
     P_by = {p['pull']: p for p in pulls}
     D_by = collections.defaultdict(list)
     for d in sorted(deaths, key=lambda d: (d['pull'], d['t'])): D_by[d['pull']].append(d)
@@ -418,6 +438,7 @@ def make_walls(bursts, E_by, P_by, profile, canon, major):
             for ev in seen: before[ev] += 1
         ev, n = before.most_common(1)[0] if before else (None, 0)
         after = ev if ev and n >= max(2, 0.5 * len(rows)) and ev != cause else None
+        after = profile.get('wall_after', {}).get(cause, after)       # profile can name the trigger outright
         key = slug(cause) + '-' + str(int(lo))
         if cause == 'Enrage':
             walls.append(dict(key=key, kind='enrage', cause='', causes=[], lo=lo, hi=hi, title=profile.get('enrage_title', 'The boss enraged'),

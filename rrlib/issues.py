@@ -195,8 +195,14 @@ def build(ctx):
         summ = (f"With {cp['alive']} or more alive at {f2(cp['t'])}, the boss ended at {st.mean(p['boss_pct'] for p in hi):.1f}% on average, "
                 f"vs {st.mean(p['boss_pct'] for p in lo):.1f}% with fewer.")
         if len(meta['stages']) > 1:
-            summ += f" {far(hi)}% of those pulls got past the first phase, vs {far(lo)}%."
-        summ += f" {top1} was the first death in {n1} of {N} pulls and {f4[top1]} of the {f4n} first-four deaths."
+            tile = meta.get('stage_tile') or 'Got past the first phase'
+            summ += f" {far(hi)}% of those pulls {tile[0].lower() + tile[1:]}, vs {far(lo)}%."
+        mc = firstc.most_common(3)
+        clear = len(mc) < 2 or n1 >= 1.5 * mc[1][1]
+        if clear:
+            summ += f" {top1} was the first death in {n1} of {N} pulls and {f4[top1]} of the {f4n} first-four deaths."
+        else:
+            summ += f" No one thing takes the first death: {', '.join(f'{c} {k}' for c, k in mc)} of {N} pulls."
         tr = trend(ctx, lambda p: p in hi, f"Pulls with {cp['alive']}+ alive at {f2(cp['t'])}", hib=True)
         ex_rows = []
         for c, k in firstc.most_common(4):
@@ -208,7 +214,10 @@ def build(ctx):
                           main=[dict(type='rows', title='What killed the first person', rows=ex_rows)],
                           side=[tr, who(ctx, firstp, 'First to die most often', lambda nm, c, n: f'{c} of {n} ({pct(c, n)}%)', min_pulls=max(3, N // 4))],
                           fixes=guide_fixes(ctx, top1, [f'{top1} takes the first death most often: plan a defensive or healthstone for it.',
-                                                        f"Healers: the first {f2(cp['t'])} is about keeping everyone up, not throughput."]),
+                                                        f"Healers: the first {f2(cp['t'])} is about keeping everyone up, not throughput."]) if clear else
+                                [f"The first death comes from a different place each pull, so it's on each of us: check your own first death on the Your report tab.",
+                                 'Use a healthstone or personal the first time you drop low. Do not save it.',
+                                 f"Healers: the first {f2(cp['t'])} is about keeping everyone up, not throughput."],
                           examples=ex(ctx, [dict(pull=p['pull'], t=D_by[p['pull']][0]['t']) for p in sorted(lo, key=lambda p: D_by[p['pull']][0]['t'] if D_by[p['pull']] else 999)[:4] if D_by[p['pull']]],
                                       lambda r: 'first death'),
                           status=status(tr), impact=len(lo) * 0.8))
@@ -277,7 +286,7 @@ def build(ctx):
         mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
         helpers = dict(trend=trend, status=status, who=who, ex=ex, f2=f2, pct=pct, num=num)
         extra = mod.issues(ctx, helpers) or []
-        gone = {c.get('replaces') for c in extra if c.get('replaces')}
+        gone = {k for c in extra for k in ([c['replaces']] if isinstance(c.get('replaces'), str) else c.get('replaces') or [])}
         cards = [c for c in cards if c['key'] not in gone] + extra
 
     cards.sort(key=lambda c: -c.get('impact', 0))
