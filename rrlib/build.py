@@ -346,6 +346,8 @@ def page_data(nights, profile, guild='', kit_dir='.'):
                mechanics4=mechanics4, mechanic_players4=mechanic_players4, replay_raw={n['code']: n['replay'] for n in nights}, roster_size=roster_size)
     from . import issues as ISS
     data['issues'] = ISS.build(ctx)
+    # a boss plugin can add sections to each player's report: player_notes(ctx) -> [{player, title, ...}]
+    data['player_notes'] = plugin_call(profile, 'player_notes', ctx) or []
     return data
 
 
@@ -556,13 +558,23 @@ def build_replay(nights, gmap, rings, profile, extras=None):
                     if d['np'] == np_ and d['ability'] == r['ability']: rg.append([d['player'], ri, d['s'], d['e']])
             # plugin markers: [kind, x, y, start, end, label] in Warcraft Logs map units, moved onto this view
             objs = []
-            for k, ox, oy, s0, s1, lab in (extras or {}).get('objects', {}).get((n['code'], np_), []):
+            for o in (extras or {}).get('objects', {}).get((n['code'], np_), []):      # extra fields (e.g. a fuse) pass through
+                k, ox, oy, s0, s1, lab = o[:6]
                 X, Y = (ox - R['center'][0]) / 100.0 - cx, (oy - R['center'][1]) / 100.0 - cy
-                objs.append([k, round(X * cr - Y * sr, 1), round(X * sr + Y * cr, 1), s0, s1, lab])
+                objs.append([k, round(X * cr - Y * sr, 1), round(X * sr + Y * cr, 1), s0, s1, lab] + [round(v, 1) if isinstance(v, float) else v for v in o[6:]])
             notes = (extras or {}).get('notes', {}).get((n['code'], np_), [])
+            # the room map Warcraft Logs draws under its replay (profile arena.map: false turns it off)
+            mp = None
+            if R.get('maps') and profile.get('arena', {}).get('map', True):
+                m0 = R['maps'][0]
+                fx = lambda v: (v - R['center'][0]) / 100.0 - cx
+                fy = lambda v: (v - R['center'][1]) / 100.0 - cy
+                mp = dict(url=f"https://assets.rpglogs.com/img/warcraft/maps/{m0.get('file') or str(m0['id']) + '-map'}.png?v=2",
+                          x0=round(fx(m0['minX']), 1), x1=round(fx(m0['maxX']), 1), y0=round(fy(m0['minY']), 1), y1=round(fy(m0['maxY']), 1),
+                          rot=round(math.degrees(math.atan2(sr, cr)), 2), name=m0.get('name', ''))
             rows.append(dict(pull=pull, seconds=secs, actors='|'.join(R['actors']), boss_actors=R.get('boss_actors', 0), unit=unit,
                              pos=base64.b64encode(bytes(buf)).decode(), rings=json.dumps(rg, ensure_ascii=False),
-                             objs=json.dumps(objs, ensure_ascii=False), notes=json.dumps(notes, ensure_ascii=False)))
+                             objs=json.dumps(objs, ensure_ascii=False), notes=json.dumps(notes, ensure_ascii=False), map=json.dumps(mp) if mp else ''))
     rows.sort(key=lambda r: r['pull'])
     MN = {1: 'Star', 2: 'Circle', 3: 'Diamond', 4: 'Triangle', 5: 'Moon', 6: 'Square', 7: 'Cross', 8: 'Skull'}
     arena_cfg = profile.get('arena', {})
