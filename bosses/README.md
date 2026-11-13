@@ -21,7 +21,7 @@ A profile makes the pages read better for one boss. Without one, everything is w
 | `enrage_title` | Title of the enrage wall. |
 | `enrage_soakers` | Who can do the mechanic that prevents the enrage, for the "enough alive" count: `{"roles": ["Melee", "Ranged", "Healer"], "max": {"Healer": 2}, "before": 8, "label": "soakers (DPS plus up to 2 healers)", "short": "soakers alive", "noun": "soakers"}`. `before` = seconds before the enrage to count at. Default: everyone alive at the enrage. |
 | `rings` | Debuffs to draw on the replay: `[{"ability": "Virulence", "style": "ring"}, {"ability": "Serpent's Fury", "style": "dash"}]`. Use `ring` for debuffs many people carry, `dash` for a single marked player. Default: picked from the logs. |
-| `arena` | `shape` (`circle`, `octagon` or `none`), `r` (edge radius in yards), `view` (half-width shown, in yards), `rotate` (degrees) or `rotate_to` (a debuff name: the replay is turned so where its first holder stood points up). |
+| `arena` | `shape` (`circle`, `octagon` or `none`), `r` (edge radius in yards), `view` (half-width shown, in yards), `rotate` (degrees) or `rotate_to` (a debuff name: the replay is turned so where its first holder stood points up). `follow: true` starts the replay zoomed on the raid (about `follow_view` yards each side, default 30), for big rooms the raid moves around in. |
 | `checkpoint` | `{"t": 75, "alive": 17}`: the "N alive at time T" split used across the page. Default: T from the median 4th death, N = raid size − 3. |
 | `cause_alias` | Merge ability names, e.g. `{"Melee": "Boss melee"}`. |
 | `events.major` | Boss abilities to show on the timeline and replay. Default: the boss's regular casts linked to the most deaths. |
@@ -29,6 +29,8 @@ A profile makes the pages read better for one boss. Without one, everything is w
 | `phase_marks` | For a boss whose log has no phases: `{"ability": "Vile Flood", "names": ["After Submerge 1", ...]}`. Each cast of that ability starts a new stage, so `stages` and the timeline bands work. |
 | `cast_gap` | `{ability: seconds}`: keep one cast per burst, for channels that log a cast every tick (Twin Fangs' Caustic Deluge). |
 | `wall_after` | `{cause: event}`: name the trigger on that cause's wipe wall when the automatic pick (the commonest event in the 12 s before) is the wrong one. |
+| `replay_objects` | Legend for markers a plugin draws on the replay: `[{"label": "Globule", "style": "dot" \| "shield" \| "burst", "color": "..."}]`. A plugin's `replay_extras(nights, gmap, profile)` returns `{"objects": {(code, np): [[kind, x, y, start, end, label]]}, "debuffs": {code: [synthetic debuff windows]}, "notes": {(code, np): [[t, text, kind]]}}`. |
+| `rings[].label`, `rings[].color` | Optional legend text and color for a ring, for synthetic rings a plugin adds. |
 | `sources` | Links to the guides you used. |
 
 ## Writing one for a new boss

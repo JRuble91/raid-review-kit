@@ -3,7 +3,7 @@
 Reads the raw log next to each night's data (n['src']) for per-event stacks, and `<code>-3421-<diff>.kicks.json`
 (interrupts and Visceral Burst casts per Broodling) when it was collected.
 """
-import collections, json, os
+import collections, json, math, os
 
 RAID_UP = 15            # "the raid was still up" = at least this many alive
 SOAK_MIN = 4            # Ravenous Feast needs 4 per hit on Mythic
@@ -35,6 +35,160 @@ def deaths_between(ctx, pull, a, b):
 
 def ordinal(k):
     return {1: '1st', 2: '2nd', 3: '3rd'}.get(k, f'{k}th')
+
+
+
+# ---------------------------------------------------------------- Globules
+# Needs <code>-3421-<diff>.globules.json next to the log: per fight, every "Caustic Globule" hit (who, where),
+# and every Barbed Bulwark (one per shielded Globule: where it spawned, when the shield came off).
+# Caustic Deluge logs one cast per Globule it drops, so the casts are the spawns. A Globule nobody takes
+# explodes 10.1 s after it spawns and hits everyone at once; any other hit is somebody taking one.
+
+FUSE = 10.1
+
+def ev_stacks(f, A, P):
+    """per player list of (t, stacks) changes of Eternal Venom"""
+    EV = A.get('Eternal Venom'); out = collections.defaultdict(list)
+    if EV is None: return out
+    for t, a, p, ty, s in sorted(f['debuffs'], key=lambda r: r[0]):
+        if a != EV: continue
+        v = 0 if ty == 1 else max(1, s) if ty in (0, 3) and s == 0 else s
+        if ty == 3 and s == 0: continue
+        out[P[p]].append((t, v))
+    return out
+
+def stack_at(series, t):
+    v = 0
+    for tt, s in series:
+        if tt > t: break
+        v = s
+    return v
+
+def model(f, AB, P, g):
+    A = {a: i for i, a in enumerate(AB)}
+    spawns = sorted(c[0] for c in f['casts'] if c[1] == A.get('Caustic Deluge') and c[4] == 0 and c[3] < 0)
+    dur = (f['end'] - f['start']) / 1000
+    # sets: chains of spawns 0.6 s apart
+    groups = []
+    for t in spawns:
+        if groups and t - groups[-1][-1] <= 0.6: groups[-1].append(t)
+        else: groups.append([t])
+    hits = sorted(g['soaks'], key=lambda r: r[0])
+    # explosions: hit clusters landing FUSE after a spawn, with 4+ targets
+    cl = []
+    for r in hits:
+        if cl and r[0] - cl[-1][0][0] <= 0.35: cl[-1].append(r)
+        else: cl.append([r])
+    spawn_left = list(spawns)
+    blasts, soaks = [], []
+    for c in cl:
+        t = c[0][0]
+        cand = [s for s in spawn_left if abs(t - s - FUSE) <= 0.35]
+        if len(c) >= 4 and cand:
+            s = min(cand, key=lambda s: abs(t - s - FUSE)); spawn_left.remove(s)
+            blasts.append(dict(t=t, spawn=s, n=len(c), victims=[r[1] for r in c]))
+        else:
+            soaks += c
+    soaks = [dict(t=r[0], who=r[1], x=r[2], y=r[3]) for r in soaks]
+    # Bulwarks: one per shielded Globule, spawned 0-0.3 s after its Globule
+    bws = sorted((v for v in g['bw'].values() if v.get('x') is not None), key=lambda v: v['first'])
+    glob = [dict(spawn=s, x=None, y=None, shield_end=None, soaked=None, blast=None) for s in spawns]
+    used = set()
+    for b in bws:
+        k = min((i for i, gl in enumerate(glob) if i not in used and 0 <= b['first'] - gl['spawn'] <= 0.4), key=lambda i: b['first'] - glob[i]['spawn'], default=None)
+        if k is None: continue
+        used.add(k); glob[k].update(x=b['x'], y=b['y'], shield_end=b['rm'] if b['rm'] is not None else b['last'])
+    for bl in blasts:
+        k = next((i for i, gl in enumerate(glob) if gl['spawn'] == bl['spawn'] and gl['blast'] is None), None)
+        if k is not None: glob[k]['blast'] = bl['t']; bl['g'] = k
+    # soaks -> Globules: by position to a shielded one when close, else the oldest open one
+    for s in soaks:
+        live = [i for i, gl in enumerate(glob) if gl['soaked'] is None and gl['blast'] is None and gl['spawn'] <= s['t'] + 0.2 and s['t'] <= gl['spawn'] + FUSE + 0.2]
+        if not live: s['g'] = None; continue
+        near = [i for i in live if glob[i]['x'] is not None and s['x'] is not None and math.hypot(glob[i]['x'] - s['x'], glob[i]['y'] - s['y']) <= 600]
+        k = min(near, key=lambda i: math.hypot(glob[i]['x'] - s['x'], glob[i]['y'] - s['y'])) if near else min(live, key=lambda i: glob[i]['spawn'])
+        glob[k]['soaked'] = s; s['g'] = k
+    # sets
+    sets = []
+    for grp in groups:
+        idx = [i for i, gl in enumerate(glob) if grp[0] <= gl['spawn'] <= grp[-1]]
+        kind = 'deluge' if len(grp) >= 8 else 'deaths'
+        end = grp[-1] + FUSE + 0.3
+        sets.append(dict(kind=kind, t0=grp[0], t1=grp[-1], end=end, idx=idx,
+                         soakers=[glob[i]['soaked']['who'] for i in idx if glob[i]['soaked']],
+                         blasts=[glob[i]['blast'] for i in idx if glob[i]['blast'] is not None],
+                         open_at_end=[i for i in idx if glob[i]['soaked'] is None and glob[i]['blast'] is None and end <= dur]))
+    return dict(spawns=spawns, glob=glob, soaks=soaks, blasts=blasts, sets=sets, dur=dur, bwhits=g.get('bwHits', []))
+
+
+def globule_pulls(ctx_nights, gmap):
+    """[(code, np, pull, raw fight, abilities, names, model)] for nights that have globules.json."""
+    out = []
+    for n in ctx_nights:
+        src = n.get('src')
+        gp = src and src.replace('.wcl.', '.globules.')
+        if not gp or not os.path.exists(gp): continue
+        W = json.load(open(src)); G = json.load(open(gp))
+        P = [p['name'] for p in W['players']]
+        for np_, f in enumerate(sorted(W['fights'], key=lambda f: f['id']), 1):
+            g = G.get(str(f['id']))
+            if g is None: continue
+            out.append((n['code'], np_, gmap.get((n['code'], np_)), f, W['abilities'], P, model(f, W['abilities'], P, g)))
+    return out
+
+
+def set_report(f, AB, P, m, raid_up=RAID_UP):
+    """Per Deluge set with the raid up: who took one, who sat out, what blew up."""
+    deaths = {}
+    for d in sorted(f['deaths']): deaths.setdefault(P[d[1]], d[0])
+    roster = [P[k] for k in f['players']]
+    A = {a: i for i, a in enumerate(AB)}
+    stacks = ev_stacks(f, A, P)
+    out = []
+    for k, S in enumerate([s for s in m['sets'] if s['kind'] == 'deluge'], 1):
+        alive0 = [n for n in roster if deaths.get(n, 1e9) > S['t0']]
+        if len(alive0) < raid_up: continue
+        took = collections.Counter(S['soakers'])
+        stayed = [n for n in alive0 if deaths.get(n, 1e9) >= S['t1'] + FUSE - 1]      # alive for the whole set
+        out.append(dict(k=k, t0=S['t0'], t1=S['t1'], end=S['end'], n=len(S['idx']), took=took, blasts=S['blasts'],
+                        sat=[n for n in stayed if not took[n]], stayed=stayed,
+                        stack=lambda n, t=S['t0']: stack_at(stacks[n], t)))
+    return out
+
+
+def replay_extras(nights, gmap, profile):
+    """Globules on the replay, a flash on whoever takes one, and a red ring on everyone who sat out a set where one blew up."""
+    debuffs, objects, notes = collections.defaultdict(list), collections.defaultdict(list), collections.defaultdict(list)
+    for code, np_, pull, f, AB, P, m in globule_pulls(nights, gmap):
+        key = (code, np_)
+        for gl in m['glob']:
+            s0 = gl['spawn']
+            end = gl['soaked']['t'] if gl['soaked'] else gl['blast'] if gl['blast'] is not None else min(m['dur'], s0 + FUSE)
+            x, y = gl['x'], gl['y']
+            if x is None and gl['soaked'] and gl['soaked']['x'] is not None: x, y = gl['soaked']['x'], gl['soaked']['y']
+            if x is None: continue
+            se = gl['shield_end']
+            if se is not None and se > s0:
+                objects[key].append([0, x, y, s0, min(se, end), 'Globule, Barbed Bulwark still up'])
+            objects[key].append([1, x, y, min(se, end) if se is not None and se > s0 else s0, end,
+                                 f"Globule, taken by {gl['soaked']['who']} at {int(gl['soaked']['t'] // 60)}:{int(gl['soaked']['t'] % 60):02d}" if gl['soaked'] else 'Globule, nobody took it'])
+            if gl['blast'] is not None:
+                objects[key].append([2, x, y, gl['blast'], gl['blast'] + 2.5, 'Globule exploded: nobody took it'])
+        for s in m['soaks']:
+            debuffs[code].append(dict(np=np_, player=s['who'], ability='Took a Globule', s=s['t'], e=s['t'] + 1.5, stacks=1))
+        for S in set_report(f, AB, P, m, raid_up=1):
+            if not S['blasts']: continue
+            b0, b1 = min(S['blasts']), max(S['blasts'])
+            for n in S['sat']:
+                debuffs[code].append(dict(np=np_, player=n, ability='No Globule this set', s=b0 - 3, e=b1 + 2, stacks=1))
+        bl = sorted(m['blasts'], key=lambda b: b['t']); i = 0
+        while i < len(bl):
+            j = i
+            while j + 1 < len(bl) and bl[j + 1]['t'] - bl[i]['t'] < 1.5: j += 1
+            n_ = j - i + 1
+            notes[key].append([bl[i]['t'], f"{n_} Globule{'s' if n_ > 1 else ''} exploded, nobody took {'them' if n_ > 1 else 'it'}", 2])
+            i = j + 1
+    return dict(debuffs=debuffs, objects=objects, notes=notes)
 
 
 def issues(ctx, H):
@@ -122,63 +276,68 @@ def issues(ctx, H):
                           for b in ex_rows],
                 status=H['status'](tr), impact=len(wiped) + 0.6))
 
-    # ------------------------------------------------------------ 2. Globules nobody soaked
-    blows = []
-    for pull, f, AB, names, K in R:
-        A = {a: i for i, a in enumerate(AB)}
-        if 'Eternal Venom' not in A: continue
-        EV = A['Eternal Venom']
-        rtb = [c[0] for c in f['casts'] if AB[c[1]] == 'Rouse the Brood' and c[4] == 0]
-        deluge = sorted({round(c[0]) for c in f['casts'] if AB[c[1]] == 'Caustic Deluge' and c[4] == 1})
-        ev = sorted((t, p) for t, a, p, ty, s in f['debuffs'] if a == EV and ty in (0, 2))
-        cl = []
-        for t, p in ev:
-            if cl and t - cl[-1][0] <= 0.3: cl[-1][1].add(p)
-            else: cl.append([t, {p}])
-        last = -99
-        for t, ps in cl:
-            al = alive_at(ctx, pull, t)
-            if len(ps) < max(6, 0.6 * al) or any(abs(t - r) < 1.5 for r in rtb): continue
-            if t - last < 1.5: continue          # one pop seen twice
-            last = t
-            d0 = max((d for d in deluge if d <= t), default=None)
-            k = deluge.index(d0) + 1 if d0 is not None else 0
-            when = f'set{k}' if d0 is not None and t - d0 <= 30 else 'late'
-            died = deaths_between(ctx, pull, t - 0.2, t + 3)
-            blows.append(dict(pull=pull, t=t, when=when, set=k, alive=al, died=len(died)))
-    if blows:
-        pulls_with = {b['pull'] for b in blows}
-        ended = [p for p in pulls if (ctx['bursts'].get(p['pull']) or {}).get('cause') == 'Caustic Globule']
-        cg_deaths = sum(1 for d in ctx['deaths'] if d['cause'] == 'Caustic Globule')
-        rows = []
-        labels = {'set1': 'Globules from the 1st Deluge', 'set2': 'Globules from the 2nd Deluge', 'set3': 'Globules from the 3rd Deluge',
-                  'set4': 'Globules from the 4th Deluge', 'late': 'Long after a Deluge (most likely Globules dropped by deaths)'}
-        for key in ['set1', 'set2', 'set3', 'set4', 'late']:
-            bs = [b for b in blows if b['when'] == key]
-            if not bs: continue
-            big = max(bs, key=lambda b: b['died'])
-            rows.append(dict(label=labels[key], desc=f"{len({b['pull'] for b in bs})} pulls · {sum(b['died'] for b in bs)} died within 3 s",
-                             value=len(bs), max=len(blows), num=f'{len(bs)} went off', go=dict(pull=big['pull'], t=max(0, round(big['t'] - 6, 1)))))
-        died3 = len({(b['pull'], d['t'], d['player']) for b in blows for d in deaths_between(ctx, b['pull'], b['t'] - 0.2, b['t'] + 3)})
-        tr = H['trend'](ctx, lambda p: p['pull'] in pulls_with, 'Pulls where a Globule went off unsoaked')
-        top = max(rows, key=lambda r: r['value'])
-        summary = (f"A Globule nobody soaks explodes, gives the whole raid an Eternal Venom stack and hits hard. We had {len(blows)} of them go off "
-                   f"in {len(pulls_with)} of {N} pulls, and {died3} people died within 3 seconds of one. Caustic Globule caused {cg_deaths} of the "
-                   f"{len(ctx['deaths'])} deaths ({H['pct'](cg_deaths, len(ctx['deaths']))}%) and ended {len(ended)} pulls. "
-                   f"The most came from {top['label'].replace('Globules from the ', 'the ').replace('Long after a Deluge', 'long after a Deluge')} ({top['value']}).")
-        cards.append(dict(
-            key='globules', replaces=['cause-Caustic Globule', 'holder-Eternal Venom', 'holder-Caustic Globule'], cause='Caustic Globule',
-            title='Globules are going off unsoaked', big=str(len(blows)), big_lbl=f'Globules exploded, in {len(pulls_with)} of {N} pulls',
-            summary=summary,
-            main=[dict(type='rows', title='When they went off (the whole raid got a stack at once)', rows=rows),
-                  dict(type='note', text='Spotted from the logs as the whole raid gaining an Eternal Venom stack in the same instant, outside Rouse the Brood. '
-                                         'The logs don\'t say whose Globule it was.')],
-            side=[tr, H['who'](ctx, collections.Counter(d['player'] for d in ctx['deaths'] if d['cause'] == 'Caustic Globule'),
-                               'Died to Caustic Globule most (per 10 pulls)', lambda nm, c, n: f'{10 * c / n:.1f}')],
-            fixes=guide.get('Caustic Globule', {}).get('fixes', []),
-            examples=[dict(pull=b['pull'], t=max(0, round(b['t'] - 6, 1)), label=f"{P[b['pull']]['label']} · {f2(b['t'])} · {b['died']} died within 3 s")
-                      for b in sorted(blows, key=lambda b: -b['died'])[:4]],
-            status=H['status'](tr), impact=len(ended) + 0.5))
+    # ------------------------------------------------------------ 2. Globules nobody took
+    GP = globule_pulls(ctx['nights'], ctx['gmap'])
+    if GP:
+        cards += globule_card(ctx, H, GP, guide, cls)
+    else:
+        blows = []
+        for pull, f, AB, names, K in R:
+            A = {a: i for i, a in enumerate(AB)}
+            if 'Eternal Venom' not in A: continue
+            EV = A['Eternal Venom']
+            rtb = [c[0] for c in f['casts'] if AB[c[1]] == 'Rouse the Brood' and c[4] == 0]
+            deluge = sorted({round(c[0]) for c in f['casts'] if AB[c[1]] == 'Caustic Deluge' and c[4] == 1})
+            ev = sorted((t, p) for t, a, p, ty, s in f['debuffs'] if a == EV and ty in (0, 2))
+            cl = []
+            for t, p in ev:
+                if cl and t - cl[-1][0] <= 0.3: cl[-1][1].add(p)
+                else: cl.append([t, {p}])
+            last = -99
+            for t, ps in cl:
+                al = alive_at(ctx, pull, t)
+                if len(ps) < max(6, 0.6 * al) or any(abs(t - r) < 1.5 for r in rtb): continue
+                if t - last < 1.5: continue          # one pop seen twice
+                last = t
+                d0 = max((d for d in deluge if d <= t), default=None)
+                k = deluge.index(d0) + 1 if d0 is not None else 0
+                when = f'set{k}' if d0 is not None and t - d0 <= 30 else 'late'
+                died = deaths_between(ctx, pull, t - 0.2, t + 3)
+                blows.append(dict(pull=pull, t=t, when=when, set=k, alive=al, died=len(died)))
+        if blows:
+            pulls_with = {b['pull'] for b in blows}
+            ended = [p for p in pulls if (ctx['bursts'].get(p['pull']) or {}).get('cause') == 'Caustic Globule']
+            cg_deaths = sum(1 for d in ctx['deaths'] if d['cause'] == 'Caustic Globule')
+            rows = []
+            labels = {'set1': 'Globules from the 1st Deluge', 'set2': 'Globules from the 2nd Deluge', 'set3': 'Globules from the 3rd Deluge',
+                      'set4': 'Globules from the 4th Deluge', 'late': 'Long after a Deluge (most likely Globules dropped by deaths)'}
+            for key in ['set1', 'set2', 'set3', 'set4', 'late']:
+                bs = [b for b in blows if b['when'] == key]
+                if not bs: continue
+                big = max(bs, key=lambda b: b['died'])
+                rows.append(dict(label=labels[key], desc=f"{len({b['pull'] for b in bs})} pulls · {sum(b['died'] for b in bs)} died within 3 s",
+                                 value=len(bs), max=len(blows), num=f'{len(bs)} went off', go=dict(pull=big['pull'], t=max(0, round(big['t'] - 6, 1)))))
+            died3 = len({(b['pull'], d['t'], d['player']) for b in blows for d in deaths_between(ctx, b['pull'], b['t'] - 0.2, b['t'] + 3)})
+            tr = H['trend'](ctx, lambda p: p['pull'] in pulls_with, 'Pulls where a Globule went off unsoaked')
+            top = max(rows, key=lambda r: r['value'])
+            summary = (f"A Globule nobody soaks explodes, gives the whole raid an Eternal Venom stack and hits hard. We had {len(blows)} of them go off "
+                       f"in {len(pulls_with)} of {N} pulls, and {died3} people died within 3 seconds of one. Caustic Globule caused {cg_deaths} of the "
+                       f"{len(ctx['deaths'])} deaths ({H['pct'](cg_deaths, len(ctx['deaths']))}%) and ended {len(ended)} pulls. "
+                       f"The most came from {top['label'].replace('Globules from the ', 'the ').replace('Long after a Deluge', 'long after a Deluge')} ({top['value']}).")
+            cards.append(dict(
+                key='globules', replaces=['cause-Caustic Globule', 'holder-Eternal Venom', 'holder-Caustic Globule'], cause='Caustic Globule',
+                title='Globules are going off unsoaked', big=str(len(blows)), big_lbl=f'Globules exploded, in {len(pulls_with)} of {N} pulls',
+                summary=summary,
+                main=[dict(type='rows', title='When they went off (the whole raid got a stack at once)', rows=rows),
+                      dict(type='note', text='Spotted from the logs as the whole raid gaining an Eternal Venom stack in the same instant, outside Rouse the Brood. '
+                                             'The logs don\'t say whose Globule it was.')],
+                side=[tr, H['who'](ctx, collections.Counter(d['player'] for d in ctx['deaths'] if d['cause'] == 'Caustic Globule'),
+                                   'Died to Caustic Globule most (per 10 pulls)', lambda nm, c, n: f'{10 * c / n:.1f}')],
+                fixes=guide.get('Caustic Globule', {}).get('fixes', []),
+                examples=[dict(pull=b['pull'], t=max(0, round(b['t'] - 6, 1)), label=f"{P[b['pull']]['label']} · {f2(b['t'])} · {b['died']} died within 3 s")
+                          for b in sorted(blows, key=lambda b: -b['died'])[:4]],
+                status=H['status'](tr), impact=len(ended) + 0.5))
+
 
     # ------------------------------------------------------------ 3. Ravenous Feast soaks
     feasts = []
@@ -295,3 +454,78 @@ def issues(ctx, H):
 def st_med(xs):
     xs = sorted(xs)
     return xs[len(xs) // 2] if xs else 0
+
+
+def globule_card(ctx, H, GP, guide, cls):
+    P, f2, N = ctx['P_by'], H['f2'], len(ctx['pulls'])
+    role = {p['player']: p['role'] for p in ctx['players4']}
+    blasts, sets_up = [], []
+    per = collections.defaultdict(collections.Counter)
+    for code, np_, pull, f, AB, names, m in GP:
+        if not pull: continue
+        for b in m['blasts']:
+            al = alive_at(ctx, pull, b['t'])
+            if al < RAID_UP: continue
+            S = next((S for S in m['sets'] if S['t0'] - 0.1 <= b['spawn'] <= S['t1'] + 0.1), None)
+            kind = f"set{[x for x in m['sets'] if x['kind'] == 'deluge'].index(S) + 1}" if S and S['kind'] == 'deluge' else 'deaths'
+            blasts.append(dict(pull=pull, t=b['t'], kind=kind, died=len(deaths_between(ctx, pull, b['t'] - 0.2, b['t'] + 3))))
+        for R in set_report(f, AB, names, m):
+            sets_up.append(dict(pull=pull, **{k: R[k] for k in ('k', 't0', 'n', 'blasts', 'sat')}, took=R['took']))
+            for nm in R['stayed']:
+                c = per[nm]; c['sets'] += 1; c['took'] += R['took'][nm]
+                if R['took'][nm] >= 2: c['double'] += 1
+                if R['blasts']:
+                    c['blown_sets'] += 1
+                    if not R['took'][nm]: c['sat_blown'] += 1
+    if not blasts and not sets_up: return []
+    pulls_with = {b['pull'] for b in blasts}
+    ended = [p for p in ctx['pulls'] if (ctx['bursts'].get(p['pull']) or {}).get('cause') == 'Caustic Globule']
+    cg_deaths = sum(1 for d in ctx['deaths'] if d['cause'] == 'Caustic Globule')
+    died3 = len({(b['pull'], d['t'], d['player']) for b in blasts for d in deaths_between(ctx, b['pull'], b['t'] - 0.2, b['t'] + 3)})
+    blown_sets = [S for S in sets_up if S['blasts']]
+    per_set = round(sum(S['n'] for S in sets_up) / max(1, len(sets_up)))
+    labels = {'set1': 'From the 1st Deluge (about 0:11)', 'set2': 'From the 2nd Deluge (about 1:12)', 'set3': 'From the 3rd Deluge (about 2:46)',
+              'set4': 'From the 4th Deluge', 'deaths': 'Dropped by people dying'}
+    rows = []
+    for key in ['set1', 'set2', 'set3', 'set4', 'deaths']:
+        bs = [b for b in blasts if b['kind'] == key]
+        if not bs: continue
+        big = max(bs, key=lambda b: b['died'])
+        rows.append(dict(label=labels[key], desc=f"{len({b['pull'] for b in bs})} pulls · {sum(b['died'] for b in bs)} died within 3 s",
+                         value=len(bs), max=len(blasts), num=f'{len(bs)} went off', go=dict(pull=big['pull'], t=max(0, round(big['t'] - 8, 1)))))
+    tag = lambda nm: f" ({role[nm].lower()})" if role.get(nm) in ('Tank', 'Healer') else ''
+    sat = sorted((nm for nm in per if per[nm]['blown_sets'] >= 3), key=lambda nm: (-per[nm]['sat_blown'] / per[nm]['blown_sets'], -per[nm]['sat_blown']))
+    sat_rows = [dict(label=nm + tag(nm), desc=f"took {per[nm]['took']} Globules in {per[nm]['sets']} sets ({per[nm]['took'] / per[nm]['sets']:.2f} a set)",
+                     value=per[nm]['sat_blown'], max=per[nm]['blown_sets'], num=f"{per[nm]['sat_blown']} of {per[nm]['blown_sets']} sets")
+                for nm in sat[:10]]
+    rate = sorted((nm for nm in per if per[nm]['sets'] >= 10), key=lambda nm: per[nm]['took'] / per[nm]['sets'])
+    most = sorted((nm for nm in per if per[nm]['sets'] >= 10), key=lambda nm: -per[nm]['took'] / per[nm]['sets'])
+    tr = H['trend'](ctx, lambda p: p['pull'] in pulls_with, 'Pulls where a Globule went off with the raid up')
+    top = max(rows, key=lambda r: r['value']) if rows else None
+    summary = (f"Each Caustic Deluge drops {per_set} Globules, one every third of a second, so with 20 alive only {max(0, 20 - per_set)} people sit a set out. "
+               f"A Globule nobody takes explodes 10 seconds after it lands, hits everyone and gives the whole raid a stack. "
+               f"With the raid still up, {len(blasts)} went off in {len(pulls_with)} of {N} pulls ({len(blown_sets)} of {len(sets_up)} Deluges), "
+               f"and {died3} people died within 3 seconds of one. Caustic Globule caused {cg_deaths} of the {len(ctx['deaths'])} deaths and ended {len(ended)} pulls."
+               + (f" The most came {top['label'].split(' (')[0][0].lower() + top['label'].split(' (')[0][1:]}: {top['value']}." if top else ''))
+    worst, seen = [], set()
+    for b in sorted(blasts, key=lambda b: -b['died']):
+        if (b['pull'], b['kind']) in seen: continue
+        seen.add((b['pull'], b['kind'])); worst.append(b)
+    worst = worst[:4]
+    return [dict(
+        key='globules', replaces=['cause-Caustic Globule', 'holder-Eternal Venom', 'holder-Caustic Globule'], cause='Caustic Globule',
+        title='Globules are going off unsoaked', big=str(len(blasts)), big_lbl=f'Globules exploded with the raid up, in {len(pulls_with)} of {N} pulls',
+        summary=summary,
+        main=[dict(type='rows', title='Where the exploded Globules came from', rows=rows),
+              dict(type='rows', title='Sat out a Deluge where a Globule blew up (of the ones they were alive for)', rows=sat_rows),
+              dict(type='note', text=f"Who took each Globule comes straight from the log. Who was meant to take it doesn't: with {per_set} Globules a set, "
+                                     f"{max(0, 20 - per_set)} people sit out every time, so a name above isn't proof they skipped theirs. Check it against your soak list. "
+                                     f"In the replay, Globules show as green dots (dashed while the Bulwark is up), a green ring flashes on whoever takes one, "
+                                     f"and everyone who sat out a set where one blew up gets a red dashed ring.")],
+        side=[tr, dict(type='who', label='Fewest Globules taken per set (10+ sets alive)',
+                       items=[dict(player=nm, cls=cls.get(nm, ''), txt=f"{per[nm]['took'] / per[nm]['sets']:.2f} ({per[nm]['took']} in {per[nm]['sets']})") for nm in rate[:6]]),
+              dict(type='who', label='Most Globules taken per set (covering for others)',
+                   items=[dict(player=nm, cls=cls.get(nm, ''), txt=f"{per[nm]['took'] / per[nm]['sets']:.2f} ({per[nm]['double']} sets with 2+)") for nm in most[:4]])],
+        fixes=guide.get('Caustic Globule', {}).get('fixes', []),
+        examples=[dict(pull=b['pull'], t=max(0, round(b['t'] - 8, 1)), label=f"{P[b['pull']]['label']} · {f2(b['t'])} · {b['died']} died within 3 s") for b in worst],
+        status=H['status'](tr), impact=len(ended) + 0.5)]

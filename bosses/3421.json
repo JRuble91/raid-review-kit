@@ -18,9 +18,23 @@
   ],
   "stage_tile": "Reached the first Submerge",
   "arena": {
-    "shape": "none"
+    "shape": "none",
+    "follow": true,
+    "follow_view": 28
   },
   "rings": [
+    {
+      "ability": "Took a Globule",
+      "style": "ring",
+      "label": "Just took a Globule",
+      "color": "var(--color-ok)"
+    },
+    {
+      "ability": "No Globule this set",
+      "style": "dash",
+      "label": "Took no Globule in a set where one blew up",
+      "color": "var(--color-bad)"
+    },
     {
       "ability": "Coiling Ichor",
       "style": "ring"
@@ -76,12 +90,12 @@
       "name": "Caustic Deluge → Caustic Globule",
       "group": "Stack soaks",
       "who": "Everyone",
-      "what": "Vexhul spreads 10 Caustic Globules each set. Walking over one soaks it and gives only you an Eternal Venom stack. A Globule nobody soaks explodes and gives the whole raid a stack, with big damage. On Mythic each Globule has a Barbed Bulwark shield that knocks back anyone who touches it until some crowd control breaks it, and a player who dies drops more Globules.",
-      "todo": "Every Globule gets soaked. Break the Bulwark with crowd control first, then the assigned player takes it. Nobody is spare: if your soaker is dead, you take it.",
+      "what": "Vexhul drops 15 Caustic Globules each set, one every third of a second (that's what the log shows). Walking over one takes it and gives only you an Eternal Venom stack. A Globule nobody takes explodes 10 seconds after it lands, hits everyone and gives the whole raid a stack. On Mythic some Globules have a Barbed Bulwark shield that knocks back anyone who touches it until crowd control breaks it, and a player who dies drops more Globules.",
+      "todo": "Every Globule gets taken within 10 seconds. With 15 a set only 5 people sit out, so if you're not on the sit-out list, take one.",
       "fixes": [
-        "Ten soakers per set, the other ten take the next set. Write it down and call it.",
+        "15 Globules a set means only 5 people sit out. Name those 5 each set (tanks, highest stacks) and everyone else takes one, every time.",
         "Break the Barbed Bulwark with crowd control (stuns, fears) before the soaker walks in, or they get knocked back and the Globule explodes.",
-        "Have one or two backup soakers per set for Globules whose soaker is dead or too high on stacks.",
+        "If you see a Globule still on the floor after you took yours, call it. It has 10 seconds from landing before it blows.",
         "Deaths drop more Globules on Mythic. A death right before a set means extra Globules to cover."
       ],
       "clip": "https://assets2.mythictrap.com/videos/venomous-abyss/the-twin-fangs/causticDeluge.mp4",
@@ -204,5 +218,22 @@
   "sources": [
     "https://www.method.gg/guides/the-venomous-abyss/the-twin-fangs",
     "https://www.mythictrap.com/en/venomous-abyss/the-twin-fangs/mythic"
+  ],
+  "replay_objects": [
+    {
+      "label": "Globule, Bulwark still up",
+      "style": "shield",
+      "color": "#8a63d2"
+    },
+    {
+      "label": "Globule",
+      "style": "dot",
+      "color": "var(--color-ok)"
+    },
+    {
+      "label": "Globule exploded (nobody took it)",
+      "style": "burst",
+      "color": "var(--color-bad)"
+    }
   ]
 }
