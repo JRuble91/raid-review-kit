@@ -149,3 +149,6 @@
 .rr .k-dash2 { width: 13px; height: 13px; border-radius: 50%; border: 1.5px dashed var(--k, var(--color-fg)); display: inline-block; box-sizing: border-box; }
 .rr .hide { display: none !important; }
 .rr .chip-btn .t { color: var(--color-fg-muted); }
+.rr .k-obj { width: 9px; height: 9px; transform: rotate(45deg); background: var(--k, var(--cds-chart-muted)); display: inline-block; border: 1px solid color-mix(in srgb, var(--color-fg) 55%, transparent); box-sizing: border-box; }
+.rr .k-shield { width: 11px; height: 11px; transform: rotate(45deg); border: 1.5px dashed var(--k, var(--color-fg)); background: color-mix(in srgb, var(--k, var(--color-fg)) 22%, transparent); display: inline-block; box-sizing: border-box; }
+.rr .k-burst { width: 12px; height: 12px; display: inline-block; background: var(--k, var(--color-bad)); clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }

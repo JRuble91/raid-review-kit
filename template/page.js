@@ -618,7 +618,18 @@ function drawPull() {
 /* ---------------- replay ---------------- */
 const RP = { pull: null, t: 0, dur: 0, playing: false, speed: 2, names: false, last: 0, raf: 0, seek: null, feedN: -1, ctx: null, key: '', aliveHead: null, cache: new Map() };
 const RING_COLORS = () => [causeColor(M().rings[0] ? M().rings[0].ability : ''), 'var(--color-fg)', dash.colors[3]];
-const ringColor = (i) => { const r = (M().rings || [])[i]; if (!r) return 'var(--color-fg)'; const c = causeColor(r.ability); return c === 'var(--cds-chart-muted)' ? (r.style === 'dash' ? 'var(--color-fg)' : dash.colors[5 + (i % 3)]) : c; };
+const ringLabel = (r) => (r.label || `Has ${r.ability}`);
+const ringColor = (i) => { const r = (M().rings || [])[i]; if (!r) return 'var(--color-fg)'; if (r.color) return r.color; const c = causeColor(r.ability); return c === 'var(--cds-chart-muted)' ? (r.style === 'dash' ? 'var(--color-fg)' : dash.colors[5 + (i % 3)]) : c; };
+
+const objStyle = (k) => ((M().objects || [])[k] || {}).style || 'dot';
+const objLabel = (k) => ((M().objects || [])[k] || {}).label || '';
+const objColor = (k) => ((M().objects || [])[k] || {}).color || 'var(--cds-chart-muted)';
+function objPath(style, r0) {
+  const r = style === 'shield' ? r0 * 1.25 : style === 'burst' ? r0 * 1.6 : r0 * 0.95;
+  if (style === 'dot' || style === 'shield') return `M0,${-r}L${r},0L0,${r}L${-r},0Z`;   // diamonds, so they don't read as players
+  if (style === 'burst') return d3.range(16).map((i) => { const rr = i % 2 ? r * 0.45 : r; const a = (i * Math.PI) / 8; return (i ? 'L' : 'M') + (rr * Math.cos(a)).toFixed(2) + ',' + (rr * Math.sin(a)).toFixed(2); }).join('') + 'Z';
+  return `M${-r},0A${r},${r} 0 1,0 ${r},0A${r},${r} 0 1,0 ${-r},0Z`;
+}
 
 function rpFrames(row) {
   if (RP.cache.has(row.pull)) return RP.cache.get(row.pull);
@@ -634,7 +645,7 @@ function rpFrames(row) {
     let fx = NaN, fy = NaN;
     for (let s = n - 1; s >= 0; s--) { const i = (s * N + a) * 2; if (Number.isNaN(xy[i])) { xy[i] = fx; xy[i + 1] = fy; } else { fx = xy[i]; fy = xy[i + 1]; } }
   }
-  const f = { A, N, n, xy, nb: Number(row.boss_actors) || 0, rings: JSON.parse(row.rings || '[]') };
+  const f = { A, N, n, xy, nb: Number(row.boss_actors) || 0, rings: JSON.parse(row.rings || '[]'), objs: JSON.parse(row.objs || '[]'), notes: JSON.parse(row.notes || '[]') };
   RP.cache.set(row.pull, f); return f;
 }
 const rpPos = (f, a, t) => {
@@ -657,7 +668,8 @@ function rpContext(f, pull, bev, ranked, players, arena, code) {
   const holding = (name, t) => f.rings.filter(([n, ri, s, e]) => n === name && s <= t && t <= e + 0.3).map(([n, ri]) => ri);
   const feed = [
     ...ev.map((b) => ({ t: b.t, boss: true, color: bossColor(b), text: bossText(b) })),
-    ...deaths.map((d) => { const h = holding(d.player, d.t).filter((ri) => rings[ri] && rings[ri].ability !== d.cause); return { t: d.t, boss: false, color: causeColor(d.cause), text: `${d.player} died · ${d.cause}`, had: h.map((ri) => rings[ri].ability), rank: d.rank }; }),
+    ...deaths.map((d) => { const h = holding(d.player, d.t).filter((ri) => rings[ri] && rings[ri].ability !== d.cause && !rings[ri].label); return { t: d.t, boss: false, color: causeColor(d.cause), text: `${d.player} died · ${d.cause}`, had: h.map((ri) => rings[ri].ability), rank: d.rank }; }),
+    ...(f.notes || []).map(([t, text, k]) => ({ t, boss: true, color: objColor(k), text })),
   ].sort((a, b) => a.t - b.t || (a.boss ? -1 : 1));
   const jumps = []; const seen = new Set();
   for (const b of ev) {
@@ -674,8 +686,17 @@ function rpContext(f, pull, bev, ranked, players, arena, code) {
 function rpBuild(box, C, W) {
   box.replaceChildren();
   const edge = C.arena.find((a) => a.kind === 'edge') || { r: 40, view: 50, shape: 'circle' };
-  const R = Number(edge.view) || 50; const s = W / (2 * R); const X = (v) => W / 2 + v * s; const Y = (v) => W / 2 - v * s;
+  const R = Number(edge.view) || 50; const s = W / (2 * R);
+  // zoom: 1 = whole room; following the raid shows about `follow_view` yards each side of the raid's middle
+  const Z = { z: 1, cx: 0, cy: 0 };
+  const X = (v) => W / 2 + (v - Z.cx) * s * Z.z; const Y = (v) => W / 2 - (v - Z.cy) * s * Z.z;
   const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${W}`).attr('height', '100%').attr('role', 'img').attr('aria-label', `Replay of ${PL(C.pull)}`);
+  const arenaG = svg.append('g');
+  const drawArena = () => { arenaG.selectAll('*').remove(); arenaParts(arenaG, C, edge, R, X, Y, s * Z.z, W); };
+  return rpBuildRest(box, C, W, svg, { X, Y, s, Z, R, drawArena });
+}
+
+function arenaParts(svg, C, edge, R, X, Y, s, W) {
   const ap = Number(edge.r) || R * 0.9;
   if (edge.shape === 'octagon') {
     const vr = ap / Math.cos(Math.PI / 8);
@@ -699,7 +720,10 @@ function rpBuild(box, C, W) {
     else if (shape === 'skull') { st(g.append('path').attr('d', `M${-ms * 0.85},${ms * 0.1} A${ms * 0.85},${ms * 0.85} 0 1 1 ${ms * 0.85},${ms * 0.1} L${ms * 0.5},${ms * 0.45} L${ms * 0.5},${ms * 0.9} L${-ms * 0.5},${ms * 0.9} L${-ms * 0.5},${ms * 0.45}Z`)); g.append('circle').attr('cx', -ms * 0.32).attr('cy', -ms * 0.05).attr('r', ms * 0.2).attr('fill', 'var(--color-bg)'); g.append('circle').attr('cx', ms * 0.32).attr('cy', -ms * 0.05).attr('r', ms * 0.2).attr('fill', 'var(--color-bg)'); }
     g.append('title').text(a.name);
   }
-  const layers = { dash: svg.append('g'), ring: svg.append('g'), dead: svg.append('g'), boss: svg.append('g'), dots: svg.append('g'), labels: svg.append('g') };
+}
+
+function rpBuildRest(box, C, W, svg, V0) {
+  const layers = { objs: svg.append('g'), dash: svg.append('g'), ring: svg.append('g'), dead: svg.append('g'), boss: svg.append('g'), dots: svg.append('g'), labels: svg.append('g') };
   const banner = el('div', 'rp-banner'); banner.hidden = true; box.appendChild(banner);
   const tip = tipFor(box);
   svg.on('mousemove', (ev) => {
@@ -707,16 +731,44 @@ function rpBuild(box, C, W) {
     let best = null, bd = 14; for (const p of pts) { const d = Math.hypot(p.px - mx, p.py - my); if (d < bd) { bd = d; best = p; } }
     if (!best) { hideTip(tip); return; }
     const lines = [[best.color, best.sub]]; if (best.dead) lines.push([causeColor(best.dead.cause), `Died at ${best.dead.t_txt} · ${best.dead.cause}`]);
-    for (const ri of best.rings || []) lines.push([ringColor(ri), `Has ${M().rings[ri].ability}`]);
+    for (const ri of best.rings || []) lines.push([ringColor(ri), ringLabel(M().rings[ri])]);
     showTip(tip, box, ev, best.name, lines);
   }).on('mouseleave', () => hideTip(tip));
-  return { svg, layers, banner, X, Y, s };
+  return { svg, layers, banner, ...V0, s: V0.s };
+}
+
+function rpZoom(C, V, t) {
+  const edge = C.arena.find((a) => a.kind === 'edge') || {};
+  const fv = Number(edge.follow_view) || 30; const can = V.R > fv * 1.4;
+  const btn = $('rp-zoom'); btn.hidden = !can;
+  if (RP.zoom == null) RP.zoom = !!edge.follow && can;
+  btn.setAttribute('aria-pressed', String(!!RP.zoom && can));
+  const on = !!RP.zoom && can;
+  let tx = 0, ty = 0, z = 1;
+  if (on) {
+    const xs = [], ys = []; const { f } = C;
+    for (let a = 0; a < f.N - f.nb; a++) {
+      const ds = C.byName.get(f.A[a]) || []; let dead = false;
+      for (let k = 0; k < ds.length; k++) if (ds[k].t <= t && !(k < ds.length - 1 && t > ds[k].t + 5)) dead = true;
+      if (dead) continue;
+      const q = rpPos(f, a, t); if (q) { xs.push(q[0]); ys.push(q[1]); }
+    }
+    if (xs.length) { xs.sort((a, b) => a - b); ys.sort((a, b) => a - b); tx = xs[xs.length >> 1]; ty = ys[ys.length >> 1]; } else { tx = V.Z.cx; ty = V.Z.cy; }
+    z = V.R / fv;
+  }
+  const snap = !RP.playing || V.Z.z !== z || Math.hypot(tx - V.Z.cx, ty - V.Z.cy) > 25;
+  const k = snap ? 1 : 0.12;
+  const nx = V.Z.cx + (tx - V.Z.cx) * k, ny = V.Z.cy + (ty - V.Z.cy) * k;
+  const moved = V.Z.z !== z || Math.abs(nx - V.Z.cx) > 0.01 || Math.abs(ny - V.Z.cy) > 0.01 || !V.arenaDrawn;
+  V.Z.z = z; V.Z.cx = nx; V.Z.cy = ny;
+  if (moved) { V.drawArena(); V.arenaDrawn = true; }
 }
 
 function rpDraw() {
   const C = RP.ctx; if (!C || !C.view) return;
   const { f } = C; const t = RP.t; const V = C.view; const follow = P().player; const rings = M().rings || [];
-  const r0 = Math.max(4, Math.min(6.5, V.s * 1.8));
+  rpZoom(C, V, t);
+  const r0 = Math.max(4, Math.min(6.5, V.s * V.Z.z * 1.8));
   const pts = [];
   for (let a = 0; a < f.N - f.nb; a++) {
     const name = f.A[a];
@@ -734,6 +786,16 @@ function rpDraw() {
     .attr('fill', (d) => `color-mix(in srgb, ${ringColor(d.ri)} 16%, transparent)`).attr('stroke', (d) => ringColor(d.ri)).attr('stroke-width', 2);
   V.layers.dash.selectAll('circle').data(dashPts, (d) => d.key).join('circle').attr('cx', (d) => d.px).attr('cy', (d) => d.py).attr('r', r0 + 9)
     .attr('fill', 'none').attr('stroke', (d) => ringColor(d.ri)).attr('stroke-width', 1.5).attr('stroke-dasharray', '3 3');
+  // plugin markers (e.g. Globules): [kind, x, y, start, end, label]
+  const ob = (f.objs || []).map((o, i) => ({ i, k: o[0], x: V.X(o[1]), y: V.Y(o[2]), s: o[3], e: o[4], lab: o[5] })).filter((o) => o.s <= t && t <= o.e);
+  const og = V.layers.objs.selectAll('g.ob').data(ob, (d) => d.i).join((en) => { const g = en.append('g').attr('class', 'ob'); g.append('path'); g.append('title'); return g; });
+  og.attr('transform', (d) => `translate(${d.x},${d.y})`);
+  og.select('title').text((d) => d.lab || objLabel(d.k));
+  og.select('path').attr('d', (d) => objPath(objStyle(d.k), r0))
+    .attr('fill', (d) => (objStyle(d.k) === 'shield' ? `color-mix(in srgb, ${objColor(d.k)} 22%, transparent)` : objColor(d.k)))
+    .attr('stroke', (d) => (objStyle(d.k) === 'shield' ? objColor(d.k) : 'color-mix(in srgb, var(--color-fg) 55%, transparent)'))
+    .attr('stroke-width', (d) => (objStyle(d.k) === 'shield' ? 1.6 : 0.8)).attr('stroke-dasharray', (d) => (objStyle(d.k) === 'shield' ? '2 2' : null))
+    .attr('opacity', (d) => (objStyle(d.k) === 'burst' ? Math.max(0.25, 1 - (t - d.s) / Math.max(0.5, d.e - d.s)) : 0.95));
   const xs = r0 * 0.85;
   V.layers.dead.selectAll('path').data(dead, (d) => d.name).join('path').attr('d', (d) => `M${d.px - xs},${d.py - xs}L${d.px + xs},${d.py + xs}M${d.px + xs},${d.py - xs}L${d.px - xs},${d.py + xs}`)
     .attr('stroke', (d) => causeColor(d.dead.cause)).attr('stroke-width', (d) => (d.me ? 3.5 : 2.4)).attr('stroke-linecap', 'round').attr('opacity', (d) => (d.me || !follow ? 0.95 : 0.7));
@@ -823,6 +885,7 @@ $('rp-play').addEventListener('click', () => (RP.playing ? rpPause() : rpPlay())
 document.querySelectorAll('#rp-speed button').forEach((b) => b.addEventListener('click', () => { RP.speed = Number(b.dataset.speed); document.querySelectorAll('#rp-speed button').forEach((q) => q.setAttribute('aria-pressed', String(q === b))); }));
 document.querySelectorAll('#rp-speed button').forEach((q) => q.setAttribute('aria-pressed', String(Number(q.dataset.speed) === RP.speed)));
 $('rp-names').addEventListener('click', () => { RP.names = !RP.names; $('rp-names').setAttribute('aria-pressed', String(RP.names)); rpDraw(); });
+$('rp-zoom').addEventListener('click', () => { RP.zoom = !RP.zoom; rpDraw(); });
 $('replay-strip').addEventListener('keydown', (e) => {
   if (e.key === 'ArrowLeft') { rpSeek(RP.t - 2); e.preventDefault(); } else if (e.key === 'ArrowRight') { rpSeek(RP.t + 2); e.preventDefault(); }
   else if (e.key === 'Home') { rpSeek(0); e.preventDefault(); } else if (e.key === 'End') { rpSeek(RP.dur); e.preventDefault(); }
@@ -833,7 +896,8 @@ function drawKey() {
   const box = $('rp-key'); box.replaceChildren();
   const add = (cls, text, color) => { const s = el('span'); const i = el(cls === 'x' ? 'b' : 'i', cls === 'x' ? 'k-x' : cls, cls === 'x' ? '✕' : null); if (color) i.style.setProperty('--k', color); s.append(i, text); box.appendChild(s); };
   add('k-dot', 'Raider, in class color'); add('k-boss', 'Boss');
-  (M().rings || []).forEach((r, i) => add(r.style === 'dash' ? 'k-dash2' : 'k-ring', `Has ${r.ability}`, ringColor(i)));
+  (M().rings || []).forEach((r, i) => add(r.style === 'dash' ? 'k-dash2' : 'k-ring', ringLabel(r), ringColor(i)));
+  (M().objects || []).forEach((o, k) => add(o.style === 'burst' ? 'k-burst' : o.style === 'shield' ? 'k-shield' : 'k-obj', o.label, objColor(k)));
   add('x', 'Died, colored by what killed them');
 }
 
